@@ -3,6 +3,7 @@
 import { prisma } from "@/lib/prisma";
 import { revalidatePath } from "next/cache";
 import { auth } from "@/auth";
+import { syncAPStatus } from "./accounts-payable";
 
 export async function getPayments() {
   return prisma.payment.findMany({
@@ -58,41 +59,37 @@ export async function createPayment(data: {
 
   const paymentNumber = await getNextPaymentNumber();
 
-  const payment = await prisma.payment.create({
-    data: {
-      paymentNumber,
-      prepId: data.prepId,
-      paymentDate: new Date(data.paymentDate),
-      paymentMethod: data.paymentMethod,
-      companyBankAccountId: data.companyBankAccountId,
-      amount: data.amount,
-      referenceNumber: data.referenceNumber,
-      notes: data.notes,
-      createdByName,
-      createdById,
-    },
-  });
-
-  await prisma.paymentPrep.update({
-    where: { id: data.prepId },
-    data: { status: "PAID" },
-  });
-
-  const prep = await prisma.paymentPrep.findUnique({
+  const prepBefore = await prisma.paymentPrep.findUniqueOrThrow({
     where: { id: data.prepId },
     include: { items: true },
   });
+  const apIds = prepBefore.items.map((item) => item.apId);
 
-  if (prep) {
-    const apIds = prep.items.map((item) => item.apId);
-    await prisma.accountsPayable.updateMany({
-      where: { id: { in: apIds } },
+  const payment = await prisma.$transaction(async (tx) => {
+    const p = await tx.payment.create({
+      data: {
+        paymentNumber,
+        prepId: data.prepId,
+        paymentDate: new Date(data.paymentDate),
+        paymentMethod: data.paymentMethod,
+        companyBankAccountId: data.companyBankAccountId,
+        amount: data.amount,
+        referenceNumber: data.referenceNumber,
+        notes: data.notes,
+        createdByName,
+        createdById,
+      },
+    });
+
+    await tx.paymentPrep.update({
+      where: { id: data.prepId },
       data: { status: "PAID" },
     });
-  }
 
+    for (const apId of apIds) await syncAPStatus(tx, apId);
 
-
+    return p;
+  });
 
   revalidatePath("/payments");
   revalidatePath("/payment-prep");

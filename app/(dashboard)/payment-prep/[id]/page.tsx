@@ -110,6 +110,14 @@ export default function PaymentPrepDetailPage() {
             รอผู้จัดการอนุมัติ
           </span>
         )}
+        {prep.status === "DRAFT" && (
+          <Link
+            href={`/payment-prep/${params.id}/edit`}
+            className="border border-blue-300 text-blue-700 px-4 py-2 rounded-lg text-sm font-medium hover:bg-blue-50 transition-colors"
+          >
+            แก้ไข
+          </Link>
+        )}
         {prep.status === "APPROVED" && !prep.payment && (
           <button onClick={() => setShowPaymentForm(true)} disabled={loading} className="bg-green-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-green-700 disabled:opacity-50 transition-colors">
             บันทึกการชำระเงิน

@@ -1,8 +1,11 @@
-﻿"use server";
+"use server";
 
 import { prisma } from "@/lib/prisma";
 import { revalidatePath } from "next/cache";
 import { auth } from "@/auth";
+import { syncAPStatus } from "./accounts-payable";
+
+const AMOUNT_TOLERANCE = 0.01;
 
 export async function getPaymentPreps(status?: string) {
   return prisma.paymentPrep.findMany({
@@ -46,63 +49,135 @@ export async function getNextPrepNumber() {
   return `PP${year}${month}${String(count + 1).padStart(4, "0")}`;
 }
 
+type PrepItemInput = { apId: string; amount: number; whtRate: number };
+
+// Builds PaymentPrepItem rows for the given AP selections, validating each amount
+// against how much of that AP's totalAmount is still unclaimed by other active preps.
+// `excludePrepId` lets an edit exclude the prep's own current items from that check.
+async function buildPrepItems(items: PrepItemInput[], excludePrepId?: string) {
+  const aps = await prisma.accountsPayable.findMany({
+    where: { id: { in: items.map((i) => i.apId) } },
+    include: { paymentPrepItems: { include: { prep: true } } },
+  });
+
+  return items.map((di) => {
+    const ap = aps.find((a) => a.id === di.apId);
+    if (!ap) throw new Error("ไม่พบรายการหนี้");
+    if (di.amount <= 0) throw new Error(`จำนวนเงินสำหรับ ${ap.apNumber} ต้องมากกว่า 0`);
+
+    const consumedByOthers = ap.paymentPrepItems
+      .filter((item) => item.prep.status !== "CANCELLED" && item.prepId !== excludePrepId)
+      .reduce((s, item) => s + item.amount, 0);
+    const remaining = ap.totalAmount - consumedByOthers;
+    if (di.amount > remaining + AMOUNT_TOLERANCE) {
+      throw new Error(`จำนวนเงินสำหรับ ${ap.apNumber} (${di.amount}) เกินยอดคงเหลือ (${Math.round(remaining * 100) / 100})`);
+    }
+
+    // Withholding tax applies to the pre-VAT portion; split the chosen amount proportionally.
+    const vatRatio = ap.totalAmount > 0 ? ap.amount / ap.totalAmount : 1;
+    const whtBase = di.amount * vatRatio;
+    const withholdingTaxAmount = Math.round(whtBase * (di.whtRate / 100) * 100) / 100;
+    const netAmount = Math.round((di.amount - withholdingTaxAmount) * 100) / 100;
+
+    return { apId: ap.id, amount: di.amount, withholdingTaxRate: di.whtRate, withholdingTaxAmount, netAmount };
+  });
+}
+
+function summarize(items: { amount: number; withholdingTaxAmount: number }[]) {
+  const totalAmount = Math.round(items.reduce((s, i) => s + i.amount, 0) * 100) / 100;
+  const totalWithholdingTax = Math.round(items.reduce((s, i) => s + i.withholdingTaxAmount, 0) * 100) / 100;
+  const netPayableAmount = Math.round((totalAmount - totalWithholdingTax) * 100) / 100;
+  return { totalAmount, totalWithholdingTax, netPayableAmount };
+}
+
 export async function createPaymentPrep(data: {
   paymentDate: string;
-  apIds: string[];
-  whtRates: Record<string, number>;
+  items: PrepItemInput[];
   notes?: string;
 }) {
   const session = await auth();
   const createdByName = (session?.user as { name?: string })?.name ?? "";
   const createdById = (session?.user as { id?: string })?.id ?? "";
 
+  if (data.items.length === 0) throw new Error("กรุณาเลือกรายการหนี้อย่างน้อย 1 รายการ");
+
   const prepNumber = await getNextPrepNumber();
+  const items = await buildPrepItems(data.items);
+  const { totalAmount, totalWithholdingTax, netPayableAmount } = summarize(items);
 
-  const aps = await prisma.accountsPayable.findMany({
-    where: { id: { in: data.apIds } },
+  const prep = await prisma.$transaction(async (tx) => {
+    const p = await tx.paymentPrep.create({
+      data: {
+        prepNumber,
+        paymentDate: new Date(data.paymentDate),
+        totalAmount,
+        totalWithholdingTax,
+        netPayableAmount,
+        notes: data.notes,
+        createdByName,
+        createdById,
+        items: { create: items },
+      },
+    });
+
+    for (const item of items) await syncAPStatus(tx, item.apId);
+
+    return p;
   });
-
-  const items = aps.map((ap) => {
-    const rate = data.whtRates[ap.id] ?? 0;
-    const whtAmount = Math.round(ap.amount * (rate / 100) * 100) / 100;
-    const netAmount = ap.totalAmount - whtAmount;
-    return { apId: ap.id, amount: ap.totalAmount, withholdingTaxRate: rate, withholdingTaxAmount: whtAmount, netAmount };
-  });
-
-  const totalAmount = items.reduce((s, i) => s + i.amount, 0);
-  const totalWithholdingTax = Math.round(items.reduce((s, i) => s + i.withholdingTaxAmount, 0) * 100) / 100;
-  const netPayableAmount = Math.round((totalAmount - totalWithholdingTax) * 100) / 100;
-
-  const prep = await prisma.paymentPrep.create({
-    data: {
-      prepNumber,
-      paymentDate: new Date(data.paymentDate),
-      totalAmount,
-      totalWithholdingTax,
-      netPayableAmount,
-      notes: data.notes,
-      createdByName,
-      createdById,
-      items: { create: items },
-    },
-  });
-
-  await prisma.accountsPayable.updateMany({
-    where: { id: { in: data.apIds } },
-    data: { status: "PAYMENT_PREP" },
-  });
-
-
 
   revalidatePath("/payment-prep");
   revalidatePath("/accounts-payable");
   return prep;
 }
 
+export async function updatePaymentPrep(
+  id: string,
+  data: {
+    paymentDate: string;
+    items: PrepItemInput[];
+    notes?: string;
+  }
+) {
+  const prep = await prisma.paymentPrep.findUniqueOrThrow({
+    where: { id },
+    include: { items: true },
+  });
+  if (prep.status !== "DRAFT") throw new Error("แก้ไขได้เฉพาะใบเตรียมจ่ายที่ยังเป็นร่างเท่านั้น");
+  if (data.items.length === 0) throw new Error("กรุณาเลือกรายการหนี้อย่างน้อย 1 รายการ");
+
+  const oldApIds = prep.items.map((item) => item.apId);
+  const newItems = await buildPrepItems(data.items, id);
+  const { totalAmount, totalWithholdingTax, netPayableAmount } = summarize(newItems);
+
+  await prisma.$transaction(async (tx) => {
+    await tx.paymentPrep.update({
+      where: { id },
+      data: {
+        paymentDate: new Date(data.paymentDate),
+        totalAmount,
+        totalWithholdingTax,
+        netPayableAmount,
+        notes: data.notes,
+        items: {
+          deleteMany: {},
+          create: newItems,
+        },
+      },
+    });
+
+    const affectedApIds = Array.from(new Set([...oldApIds, ...newItems.map((i) => i.apId)]));
+    for (const apId of affectedApIds) await syncAPStatus(tx, apId);
+  });
+
+  revalidatePath("/payment-prep");
+  revalidatePath(`/payment-prep/${id}`);
+  revalidatePath("/accounts-payable");
+}
+
 export async function approvePaymentPrep(id: string) {
   const session = await auth();
   const u = session?.user as { level?: string; role?: string; name?: string; id?: string } | undefined;
-  if (u?.level !== "MANAGER" && u?.role !== "OWNER") throw new Error("เน€เธเธเธฒเธฐเธเธนเนเธเธฑเธ”เธเธฒเธฃเธซเธฃเธทเธญเน€เธเนเธฒเธเธญเธเน€เธ—เนเธฒเธเธฑเนเธเธ—เธตเนเธญเธเธธเธกเธฑเธ•เธดเนเธ”เน");
+  if (u?.level !== "MANAGER" && u?.role !== "OWNER") throw new Error("เน€เธเธเธฒเธฐเธเธนเนเธเธฑเธ”เธเธฒเธฃเธซเธฃเธทเธญเน€เธเนเธฒเธเธญเธเน€เธ—เนเธฒเธเธฑเนเธเธ—เธตเนเธญเธเธธเธกเธฑเธ•เธดเนเธ”เน");
 
   await prisma.paymentPrep.update({
     where: { id },
@@ -143,14 +218,13 @@ export async function cancelPaymentPrep(id: string) {
   if (!prep) return;
 
   const apIds = prep.items.map((item) => item.apId);
-  await prisma.accountsPayable.updateMany({
-    where: { id: { in: apIds } },
-    data: { status: "APPROVED" },
-  });
 
-  await prisma.paymentPrep.update({
-    where: { id },
-    data: { status: "CANCELLED" },
+  await prisma.$transaction(async (tx) => {
+    await tx.paymentPrep.update({
+      where: { id },
+      data: { status: "CANCELLED" },
+    });
+    for (const apId of apIds) await syncAPStatus(tx, apId);
   });
 
   revalidatePath("/payment-prep");

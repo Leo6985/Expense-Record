@@ -1,8 +1,36 @@
 ﻿"use server";
 
 import { prisma } from "@/lib/prisma";
+import { Prisma } from "@prisma/client";
 import { revalidatePath } from "next/cache";
 import { auth } from "@/auth";
+
+const AMOUNT_TOLERANCE = 0.01;
+
+// Sums how much of an AP's totalAmount has been committed to non-cancelled payment
+// preps, and reconciles ap.status against it. Called after any prep create/edit/
+// cancel/payment so partially-prepped APs stay selectable for the remaining balance.
+export async function syncAPStatus(tx: Prisma.TransactionClient, apId: string) {
+  const ap = await tx.accountsPayable.findUniqueOrThrow({
+    where: { id: apId },
+    include: { paymentPrepItems: { include: { prep: true } } },
+  });
+  if (ap.status === "CANCELLED") return;
+
+  const activeItems = ap.paymentPrepItems.filter((item) => item.prep.status !== "CANCELLED");
+  const consumed = activeItems.reduce((s, item) => s + item.amount, 0);
+  const remaining = ap.totalAmount - consumed;
+  const allSettled = activeItems.length > 0 && activeItems.every((item) => item.prep.status === "PAID");
+
+  let newStatus = ap.status;
+  if (remaining <= AMOUNT_TOLERANCE && allSettled) newStatus = "PAID";
+  else if (remaining <= AMOUNT_TOLERANCE) newStatus = "PAYMENT_PREP";
+  else newStatus = "APPROVED";
+
+  if (newStatus !== ap.status) {
+    await tx.accountsPayable.update({ where: { id: apId }, data: { status: newStatus } });
+  }
+}
 
 export async function getAccountsPayable(search?: string, status?: string) {
   return prisma.accountsPayable.findMany({
@@ -134,12 +162,31 @@ export async function cancelAccountsPayable(id: string) {
   revalidatePath(`/accounts-payable/${id}`);
 }
 
-export async function getAvailableAPForPayment() {
-  return prisma.accountsPayable.findMany({
-    where: { status: { in: ["PENDING", "APPROVED"] } },
-    include: { vendor: { select: { name: true, bankAccountNo: true, bankAccountName: true } } },
+// Lists APs still open for a payment prep, with each one's unclaimed balance.
+// When editing an existing DRAFT prep, pass its id as `excludePrepId` so that
+// prep's own items don't count against the AP's remaining balance.
+export async function getAvailableAPForPayment(excludePrepId?: string) {
+  // Editing a prep may need to show an AP that this same prep already locked into
+  // PAYMENT_PREP status by consuming its whole remaining balance.
+  const statuses = excludePrepId ? ["PENDING", "APPROVED", "PAYMENT_PREP"] : ["PENDING", "APPROVED"];
+  const aps = await prisma.accountsPayable.findMany({
+    where: { status: { in: statuses } },
+    include: {
+      vendor: { select: { name: true, bankAccountNo: true, bankAccountName: true } },
+      paymentPrepItems: { include: { prep: { select: { status: true } } } },
+    },
     orderBy: { dueDate: "asc" },
   });
+
+  return aps
+    .map((ap) => {
+      const consumed = ap.paymentPrepItems
+        .filter((item) => item.prep.status !== "CANCELLED" && item.prepId !== excludePrepId)
+        .reduce((s, item) => s + item.amount, 0);
+      const remainingAmount = Math.max(0, Math.round((ap.totalAmount - consumed) * 100) / 100);
+      return { ...ap, remainingAmount };
+    })
+    .filter((ap) => ap.remainingAmount > AMOUNT_TOLERANCE);
 }
 
 export async function getReceivedPOsWithoutAP() {
