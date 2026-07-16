@@ -7,3 +7,4 @@ prisma/*.db-journal
 
 .vercel
 .env.vercel
+tsconfig.tsbuildinfo

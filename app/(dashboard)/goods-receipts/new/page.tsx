@@ -1,13 +1,22 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useSession } from "next-auth/react";
 import { getApprovedPOsForGR, createGoodsReceipt } from "@/actions/goods-receipts";
 import { formatDate, formatCurrency } from "@/lib/utils";
 import Link from "next/link";
 
-type POItem = { id: string; description: string; quantity: number; unit: string | null; unitPrice: number; totalPrice: number };
+type POItem = {
+  id: string;
+  description: string;
+  quantity: number;
+  unit: string | null;
+  unitPrice: number;
+  totalPrice: number;
+  receivedQuantity: number;
+  outstandingQuantity: number;
+};
 type PO = {
   id: string;
   poNumber: string;
@@ -19,10 +28,12 @@ type PO = {
 
 export default function NewGoodsReceiptPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { data: session } = useSession();
   const userName = session?.user?.name ?? "";
   const [availablePOs, setAvailablePOs] = useState<PO[]>([]);
   const [selectedPO, setSelectedPO] = useState<PO | null>(null);
+  const [receiveQty, setReceiveQty] = useState<Record<string, string>>({});
   const today = new Date().toISOString().split("T")[0];
   const [receivedDate, setReceivedDate] = useState(today);
   const [receivedBy, setReceivedBy] = useState("");
@@ -41,17 +52,37 @@ export default function NewGoodsReceiptPage() {
   }
 
   useEffect(() => {
-    getApprovedPOsForGR().then((pos) => setAvailablePOs(pos as PO[]));
+    getApprovedPOsForGR().then((pos) => {
+      const typedPOs = pos as PO[];
+      setAvailablePOs(typedPOs);
+      const preselectId = searchParams.get("poId");
+      if (preselectId) {
+        const po = typedPOs.find((p) => p.id === preselectId);
+        if (po) handleSelectPO(po);
+      }
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
     if (session?.user?.name) setReceivedBy(session.user.name);
   }, [session]);
 
-  function handleSelectPO(poId: string) {
-    const po = availablePOs.find((p) => p.id === poId) ?? null;
+  function handleSelectPO(po: PO) {
     setSelectedPO(po);
+    const defaults: Record<string, string> = {};
+    for (const item of po.items) {
+      if (item.outstandingQuantity > 0) defaults[item.id] = String(item.outstandingQuantity);
+    }
+    setReceiveQty(defaults);
   }
+
+  const receiveLines = selectedPO
+    ? selectedPO.items
+        .map((item) => ({ item, qty: parseFloat(receiveQty[item.id] || "0") || 0 }))
+        .filter((l) => l.qty > 0)
+    : [];
+  const receiveAmount = receiveLines.reduce((sum, l) => sum + l.qty * l.item.unitPrice, 0);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -63,6 +94,18 @@ export default function NewGoodsReceiptPage() {
       setLoading(false);
       return;
     }
+    if (receiveLines.length === 0) {
+      setError("กรุณาระบุจำนวนที่รับอย่างน้อย 1 รายการ");
+      setLoading(false);
+      return;
+    }
+    for (const l of receiveLines) {
+      if (l.qty > l.item.outstandingQuantity + 0.0001) {
+        setError(`จำนวนที่รับ "${l.item.description}" เกินกว่าจำนวนคงเหลือ (${l.item.outstandingQuantity})`);
+        setLoading(false);
+        return;
+      }
+    }
     try {
       const gr = await createGoodsReceipt({
         poId: selectedPO.id,
@@ -72,6 +115,7 @@ export default function NewGoodsReceiptPage() {
         invoiceNumber: invoiceNumber.trim(),
         invoiceDate,
         vatAmount: vatAmount ? parseFloat(vatAmount) : undefined,
+        items: receiveLines.map((l) => ({ poItemId: l.item.id, quantity: l.qty })),
       });
       router.push(`/goods-receipts/${gr.id}`);
     } catch (err) {
@@ -107,6 +151,7 @@ export default function NewGoodsReceiptPage() {
             <div className="space-y-2">
               {availablePOs.map((po) => {
                 const isSelected = selectedPO?.id === po.id;
+                const hasPartial = po.items.some((i) => i.receivedQuantity > 0);
                 return (
                   <label
                     key={po.id}
@@ -119,7 +164,7 @@ export default function NewGoodsReceiptPage() {
                       name="poId"
                       value={po.id}
                       checked={isSelected}
-                      onChange={() => handleSelectPO(po.id)}
+                      onChange={() => handleSelectPO(po)}
                       className="mt-1 w-4 h-4 text-blue-600"
                     />
                     <div className="flex-1 text-sm">
@@ -127,6 +172,9 @@ export default function NewGoodsReceiptPage() {
                         <span className="font-mono text-blue-700">{po.poNumber}</span>
                         <span className="text-gray-400">|</span>
                         <span>{po.vendor.name}</span>
+                        {hasPartial && (
+                          <span className="text-xs bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded">รับบางส่วนแล้ว</span>
+                        )}
                       </div>
                       <div className="text-gray-500 text-xs mt-0.5">
                         วันที่สั่ง: {formatDate(po.orderDate)} · {po.items.length} รายการ
@@ -142,35 +190,56 @@ export default function NewGoodsReceiptPage() {
           )}
         </div>
 
-        {/* Step 2: PO Items Preview */}
+        {/* Step 2: PO Items — choose quantity to receive now */}
         {selectedPO && (
           <div className="bg-blue-50 border border-blue-200 rounded-xl p-5">
-            <h2 className="font-semibold text-blue-900 mb-3">รายการสินค้าใน {selectedPO.poNumber}</h2>
+            <h2 className="font-semibold text-blue-900 mb-3">รายการสินค้าใน {selectedPO.poNumber} — ระบุจำนวนที่รับ</h2>
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-blue-200">
                   <th className="text-left py-1.5 font-medium text-blue-800">รายการ</th>
-                  <th className="text-right py-1.5 font-medium text-blue-800">จำนวน</th>
-                  <th className="text-left py-1.5 font-medium text-blue-800 pl-2">หน่วย</th>
-                  <th className="text-right py-1.5 font-medium text-blue-800">ราคา/หน่วย</th>
+                  <th className="text-right py-1.5 font-medium text-blue-800">สั่งซื้อ</th>
+                  <th className="text-right py-1.5 font-medium text-blue-800">รับแล้ว</th>
+                  <th className="text-right py-1.5 font-medium text-blue-800">คงเหลือ</th>
+                  <th className="text-right py-1.5 font-medium text-blue-800 w-28">รับครั้งนี้</th>
                   <th className="text-right py-1.5 font-medium text-blue-800">รวม</th>
                 </tr>
               </thead>
               <tbody>
-                {selectedPO.items.map((item) => (
-                  <tr key={item.id} className="border-b border-blue-100">
-                    <td className="py-1.5">{item.description}</td>
-                    <td className="py-1.5 text-right">{formatCurrency(item.quantity)}</td>
-                    <td className="py-1.5 pl-2 text-blue-700">{item.unit ?? "-"}</td>
-                    <td className="py-1.5 text-right">฿{formatCurrency(item.unitPrice)}</td>
-                    <td className="py-1.5 text-right font-medium">฿{formatCurrency(item.totalPrice)}</td>
-                  </tr>
-                ))}
+                {selectedPO.items.map((item) => {
+                  const qty = parseFloat(receiveQty[item.id] || "0") || 0;
+                  const lineTotal = qty * item.unitPrice;
+                  const isFullyReceived = item.outstandingQuantity <= 0.0001;
+                  return (
+                    <tr key={item.id} className="border-b border-blue-100">
+                      <td className="py-1.5">
+                        {item.description}
+                        {item.unit && <span className="text-blue-700 text-xs ml-1">({item.unit})</span>}
+                      </td>
+                      <td className="py-1.5 text-right">{formatCurrency(item.quantity)}</td>
+                      <td className="py-1.5 text-right text-gray-500">{formatCurrency(item.receivedQuantity)}</td>
+                      <td className="py-1.5 text-right font-medium">{formatCurrency(item.outstandingQuantity)}</td>
+                      <td className="py-1.5 text-right">
+                        <input
+                          type="number"
+                          min="0"
+                          max={item.outstandingQuantity}
+                          step="0.01"
+                          disabled={isFullyReceived}
+                          value={receiveQty[item.id] ?? ""}
+                          onChange={(e) => setReceiveQty((prev) => ({ ...prev, [item.id]: e.target.value }))}
+                          className="w-24 border border-gray-200 rounded px-2 py-1 text-sm text-right bg-white focus:outline-none focus:ring-1 focus:ring-blue-400 disabled:bg-gray-100"
+                        />
+                      </td>
+                      <td className="py-1.5 text-right font-medium">฿{formatCurrency(lineTotal)}</td>
+                    </tr>
+                  );
+                })}
               </tbody>
               <tfoot>
                 <tr>
-                  <td colSpan={4} className="pt-2 text-right font-bold text-blue-900">ยอดรวม</td>
-                  <td className="pt-2 text-right font-bold text-blue-700">฿{formatCurrency(selectedPO.totalAmount)}</td>
+                  <td colSpan={5} className="pt-2 text-right font-bold text-blue-900">ยอดที่รับครั้งนี้</td>
+                  <td className="pt-2 text-right font-bold text-blue-700">฿{formatCurrency(receiveAmount)}</td>
                 </tr>
               </tfoot>
             </table>
@@ -265,14 +334,14 @@ export default function NewGoodsReceiptPage() {
               </div>
             </div>
             <div className="mt-4 bg-orange-50 rounded-lg p-3 text-sm flex justify-between">
-              <span className="text-gray-600">ยอดหนี้ที่จะตั้ง</span>
+              <span className="text-gray-600">ยอดหนี้ที่จะตั้ง (เฉพาะรายการที่รับครั้งนี้)</span>
               <div className="text-right">
-                <div className="text-gray-500">มูลค่า: ฿{formatCurrency(selectedPO.totalAmount)}</div>
+                <div className="text-gray-500">มูลค่า: ฿{formatCurrency(receiveAmount)}</div>
                 {vatAmount && parseFloat(vatAmount) > 0 && (
                   <div className="text-gray-500">VAT: ฿{formatCurrency(parseFloat(vatAmount))}</div>
                 )}
                 <div className="font-bold text-orange-700 text-base">
-                  รวม: ฿{formatCurrency(selectedPO.totalAmount + (vatAmount ? parseFloat(vatAmount) : 0))}
+                  รวม: ฿{formatCurrency(receiveAmount + (vatAmount ? parseFloat(vatAmount) : 0))}
                 </div>
               </div>
             </div>

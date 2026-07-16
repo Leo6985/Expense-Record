@@ -119,6 +119,8 @@ model POItem {
   unit        String?
   unitPrice   Float
   totalPrice  Float
+
+  goodsReceiptItems GoodsReceiptItem[]
 }
 
 model GoodsReceipt {
@@ -133,7 +135,19 @@ model GoodsReceipt {
   createdById   String?
   createdAt     DateTime      @default(now())
 
+  items           GoodsReceiptItem[]
   accountsPayable AccountsPayable[]
+}
+
+model GoodsReceiptItem {
+  id         String       @id @default(cuid())
+  grId       String
+  gr         GoodsReceipt @relation(fields: [grId], references: [id], onDelete: Cascade)
+  poItemId   String
+  poItem     POItem       @relation(fields: [poItemId], references: [id])
+  quantity   Float
+  unitPrice  Float
+  totalPrice Float
 }
 
 model AccountsPayable {
