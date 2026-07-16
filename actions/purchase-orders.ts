@@ -176,6 +176,28 @@ export async function approvePurchaseOrder(id: string) {
   revalidatePath(`/purchase-orders/${id}`);
 }
 
+export async function unapprovePurchaseOrder(id: string) {
+  const session = await auth();
+  const u = session?.user as { level?: string; role?: string } | undefined;
+  if (u?.level !== "MANAGER" && u?.role !== "OWNER") throw new Error("เฉพาะผู้จัดการหรือเจ้าของเท่านั้นที่ยกเลิกการอนุมัติได้");
+
+  const po = await prisma.purchaseOrder.findUnique({
+    where: { id },
+    include: { goodsReceipts: true },
+  });
+  if (!po) throw new Error("ไม่พบใบสั่งซื้อ");
+  if (po.status !== "APPROVED") throw new Error("ยกเลิกอนุมัติได้เฉพาะ PO ที่อนุมัติแล้วเท่านั้น");
+  if (po.goodsReceipts.length > 0) throw new Error("ไม่สามารถยกเลิกอนุมัติได้ เนื่องจากมีการรับสินค้าแล้ว กรุณาลบใบรับสินค้าก่อน");
+
+  await prisma.purchaseOrder.update({
+    where: { id },
+    data: { status: "DRAFT", approvedByName: null, approvedById: null, approvedAt: null },
+  });
+
+  revalidatePath("/purchase-orders");
+  revalidatePath(`/purchase-orders/${id}`);
+}
+
 export async function deletePurchaseOrder(id: string) {
   const po = await prisma.purchaseOrder.findUnique({ where: { id } });
   if (!po) return;

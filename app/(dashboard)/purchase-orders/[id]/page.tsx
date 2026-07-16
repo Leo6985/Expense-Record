@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
-import { getPurchaseOrder, approvePurchaseOrder, cancelPurchaseOrder, deletePurchaseOrder } from "@/actions/purchase-orders";
+import { getPurchaseOrder, approvePurchaseOrder, unapprovePurchaseOrder, cancelPurchaseOrder, deletePurchaseOrder } from "@/actions/purchase-orders";
 import { createGoodsReceipt } from "@/actions/goods-receipts";
 import { formatDate, formatCurrency } from "@/lib/utils";
 import Link from "next/link";
@@ -88,6 +88,19 @@ export default function PODetailPage() {
     setLoading(false);
   }
 
+  async function handleUnapprove() {
+    if (!confirm("ยืนยันการยกเลิกอนุมัติ? เอกสารจะกลับไปเป็นสถานะร่างและแก้ไขได้")) return;
+    setLoading(true);
+    setError("");
+    try {
+      await unapprovePurchaseOrder(po!.id);
+      setPO({ ...po!, status: "DRAFT", approvedByName: null, approvedById: null, approvedAt: null });
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "เกิดข้อผิดพลาด");
+    }
+    setLoading(false);
+  }
+
   async function handleReceive(e: React.FormEvent) {
     e.preventDefault();
     if (!invoiceNumber.trim()) {
@@ -156,6 +169,15 @@ export default function PODetailPage() {
             className="bg-green-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-green-700 disabled:opacity-50 transition-colors"
           >
             รับสินค้าเข้าระบบ
+          </button>
+        )}
+        {po.status === "APPROVED" && isManager && po.goodsReceipts.length === 0 && (
+          <button
+            onClick={handleUnapprove}
+            disabled={loading}
+            className="border border-amber-300 text-amber-700 px-4 py-2 rounded-lg text-sm font-medium hover:bg-amber-50 disabled:opacity-50 transition-colors"
+          >
+            ยกเลิกอนุมัติ
           </button>
         )}
         {(po.status === "DRAFT" || po.status === "APPROVED") && (

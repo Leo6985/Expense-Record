@@ -118,6 +118,91 @@ function VendorCombobox({
   );
 }
 
+function ProductCombobox({
+  products,
+  productId,
+  fallbackLabel,
+  onSelect,
+}: {
+  products: Product[];
+  productId: string;
+  fallbackLabel?: string;
+  onSelect: (id: string) => void;
+}) {
+  const [query, setQuery] = useState("");
+  const [open, setOpen] = useState(false);
+  const boxRef = useRef<HTMLDivElement>(null);
+
+  const selected = products.find((p) => p.id === productId);
+
+  useEffect(() => {
+    function handleClickOutside(e: MouseEvent) {
+      if (boxRef.current && !boxRef.current.contains(e.target as Node)) {
+        setOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
+  const filtered = query.trim()
+    ? products.filter(
+        (p) =>
+          p.name.toLowerCase().includes(query.toLowerCase()) ||
+          p.code.toLowerCase().includes(query.toLowerCase())
+      )
+    : products;
+
+  const displayValue = selected
+    ? `${selected.code} — ${selected.name}`
+    : productId && fallbackLabel
+    ? `${fallbackLabel} (ไม่พร้อมใช้งาน)`
+    : "";
+
+  return (
+    <div className="relative" ref={boxRef}>
+      <input
+        value={open ? query : displayValue}
+        onChange={(e) => {
+          setQuery(e.target.value);
+          if (productId) onSelect("");
+        }}
+        onFocus={() => {
+          setQuery("");
+          setOpen(true);
+        }}
+        placeholder="พิมพ์เพื่อค้นหาสินค้า..."
+        autoComplete="off"
+        required
+        className="w-full border border-gray-200 rounded-lg px-2 py-1.5 text-sm bg-white focus:outline-none focus:ring-1 focus:ring-blue-400"
+      />
+      {open && (
+        <div className="absolute z-10 mt-1 w-full max-h-56 overflow-auto bg-white border border-gray-200 rounded-lg shadow-lg">
+          {filtered.length === 0 ? (
+            <div className="px-3 py-2 text-sm text-gray-400">ไม่พบสินค้า</div>
+          ) : (
+            filtered.map((p) => (
+              <button
+                type="button"
+                key={p.id}
+                onClick={() => {
+                  onSelect(p.id);
+                  setQuery("");
+                  setOpen(false);
+                }}
+                className="w-full text-left px-3 py-2 text-sm hover:bg-blue-50 focus:bg-blue-50 focus:outline-none"
+              >
+                <span className="font-mono text-blue-700">{p.code}</span> — {p.name}
+                {p.unit ? ` (${p.unit})` : ""}
+              </button>
+            ))
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 const emptyItem: Item = { productId: "", description: "", quantity: "1", unit: "", unitPrice: "0" };
 
 export default function PurchaseOrderForm({
@@ -318,22 +403,12 @@ export default function PurchaseOrderForm({
                   <div className="flex items-start gap-2 mb-2">
                     <div className="flex-1">
                       <label className="block text-xs font-medium text-gray-500 mb-1">สินค้า *</label>
-                      <select
-                        value={item.productId}
-                        onChange={(e) => selectProduct(index, e.target.value)}
-                        required
-                        className="w-full border border-gray-200 rounded-lg px-2 py-1.5 text-sm bg-white focus:outline-none focus:ring-1 focus:ring-blue-400"
-                      >
-                        <option value="">-- เลือกสินค้า --</option>
-                        {items[index].productId && !products.some((p) => p.id === items[index].productId) && (
-                          <option value={items[index].productId}>{items[index].description} (ไม่พร้อมใช้งาน)</option>
-                        )}
-                        {products.map((p) => (
-                          <option key={p.id} value={p.id}>
-                            {p.code} — {p.name}{p.unit ? ` (${p.unit})` : ""}
-                          </option>
-                        ))}
-                      </select>
+                      <ProductCombobox
+                        products={products}
+                        productId={item.productId}
+                        fallbackLabel={item.description}
+                        onSelect={(id) => selectProduct(index, id)}
+                      />
                     </div>
                     {items.length > 1 && (
                       <button

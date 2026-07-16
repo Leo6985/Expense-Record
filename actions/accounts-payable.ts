@@ -101,6 +101,29 @@ export async function approveAccountsPayable(id: string) {
   revalidatePath(`/accounts-payable/${id}`);
 }
 
+export async function unapproveAccountsPayable(id: string) {
+  const session = await auth();
+  const u = session?.user as { level?: string; role?: string } | undefined;
+  if (u?.level !== "MANAGER" && u?.role !== "OWNER") throw new Error("เฉพาะผู้จัดการหรือเจ้าของเท่านั้นที่ยกเลิกการอนุมัติได้");
+
+  const ap = await prisma.accountsPayable.findUnique({
+    where: { id },
+    include: { paymentPrepItems: { include: { prep: true } } },
+  });
+  if (!ap) throw new Error("ไม่พบรายการหนี้");
+  if (ap.status !== "APPROVED") throw new Error("ยกเลิกอนุมัติได้เฉพาะรายการที่อนุมัติแล้วเท่านั้น");
+  const hasActivePrep = ap.paymentPrepItems.some((item) => item.prep.status !== "CANCELLED");
+  if (hasActivePrep) throw new Error("ไม่สามารถยกเลิกอนุมัติได้ เนื่องจากถูกดึงไปใช้ในใบเตรียมจ่ายแล้ว");
+
+  await prisma.accountsPayable.update({
+    where: { id },
+    data: { status: "PENDING", approvedByName: null, approvedById: null },
+  });
+
+  revalidatePath("/accounts-payable");
+  revalidatePath(`/accounts-payable/${id}`);
+}
+
 export async function cancelAccountsPayable(id: string) {
   await prisma.accountsPayable.update({
     where: { id },

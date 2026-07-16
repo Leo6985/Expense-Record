@@ -112,6 +112,28 @@ export async function approvePaymentPrep(id: string) {
   revalidatePath(`/payment-prep/${id}`);
 }
 
+export async function unapprovePaymentPrep(id: string) {
+  const session = await auth();
+  const u = session?.user as { level?: string; role?: string } | undefined;
+  if (u?.level !== "MANAGER" && u?.role !== "OWNER") throw new Error("เฉพาะผู้จัดการหรือเจ้าของเท่านั้นที่ยกเลิกการอนุมัติได้");
+
+  const prep = await prisma.paymentPrep.findUnique({
+    where: { id },
+    include: { payment: true },
+  });
+  if (!prep) throw new Error("ไม่พบใบเตรียมจ่าย");
+  if (prep.status !== "APPROVED") throw new Error("ยกเลิกอนุมัติได้เฉพาะใบเตรียมจ่ายที่อนุมัติแล้วเท่านั้น");
+  if (prep.payment) throw new Error("ไม่สามารถยกเลิกอนุมัติได้ เนื่องจากมีการบันทึกการชำระเงินแล้ว");
+
+  await prisma.paymentPrep.update({
+    where: { id },
+    data: { status: "DRAFT", approvedByName: null, approvedById: null, approvedAt: null },
+  });
+
+  revalidatePath("/payment-prep");
+  revalidatePath(`/payment-prep/${id}`);
+}
+
 export async function cancelPaymentPrep(id: string) {
   const prep = await prisma.paymentPrep.findUnique({
     where: { id },

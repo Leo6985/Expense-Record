@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
-import { getPaymentPrep, approvePaymentPrep, cancelPaymentPrep } from "@/actions/payment-prep";
+import { getPaymentPrep, approvePaymentPrep, unapprovePaymentPrep, cancelPaymentPrep } from "@/actions/payment-prep";
 import { getCompanyBankAccounts, createPayment } from "@/actions/payments";
 import { formatDate, formatCurrency } from "@/lib/utils";
 import Link from "next/link";
@@ -59,6 +59,18 @@ export default function PaymentPrepDetailPage() {
     router.push("/payment-prep");
   }
 
+  async function handleUnapprove() {
+    if (!confirm("ยืนยันการยกเลิกอนุมัติ? เอกสารจะกลับไปเป็นสถานะร่างและแก้ไขได้")) return;
+    setLoading(true);
+    try {
+      await unapprovePaymentPrep(prep!.id);
+      setPrep({ ...prep!, status: "DRAFT", approvedByName: null, approvedById: null, approvedAt: null });
+    } catch (err) {
+      alert(err instanceof Error ? err.message : "เกิดข้อผิดพลาด");
+    }
+    setLoading(false);
+  }
+
   async function handlePayment(e: React.FormEvent) {
     e.preventDefault();
     setLoading(true);
@@ -101,6 +113,11 @@ export default function PaymentPrepDetailPage() {
         {prep.status === "APPROVED" && !prep.payment && (
           <button onClick={() => setShowPaymentForm(true)} disabled={loading} className="bg-green-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-green-700 disabled:opacity-50 transition-colors">
             บันทึกการชำระเงิน
+          </button>
+        )}
+        {prep.status === "APPROVED" && !prep.payment && isManager && (
+          <button onClick={handleUnapprove} disabled={loading} className="border border-amber-300 text-amber-700 px-4 py-2 rounded-lg text-sm font-medium hover:bg-amber-50 disabled:opacity-50 transition-colors">
+            ยกเลิกอนุมัติ
           </button>
         )}
         {(prep.status === "DRAFT" || prep.status === "APPROVED") && (

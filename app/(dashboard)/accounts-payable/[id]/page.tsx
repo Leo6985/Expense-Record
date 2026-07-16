@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
-import { getAccountsPayableById, approveAccountsPayable, cancelAccountsPayable } from "@/actions/accounts-payable";
+import { getAccountsPayableById, approveAccountsPayable, unapproveAccountsPayable, cancelAccountsPayable } from "@/actions/accounts-payable";
 import { formatDate, formatCurrency } from "@/lib/utils";
 import Link from "next/link";
 
@@ -58,6 +58,19 @@ export default function APDetailPage() {
     setLoading(false);
   }
 
+  async function handleUnapprove() {
+    if (!confirm("ยืนยันการยกเลิกอนุมัติ? เอกสารจะกลับไปเป็นสถานะรอดำเนินการ")) return;
+    setLoading(true);
+    setError("");
+    try {
+      await unapproveAccountsPayable(ap!.id);
+      setAP({ ...ap!, status: "PENDING", approvedByName: null, approvedById: null });
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "เกิดข้อผิดพลาด");
+    }
+    setLoading(false);
+  }
+
   return (
     <div className="max-w-2xl">
       <div className="flex items-center gap-3 mb-6">
@@ -94,6 +107,15 @@ export default function APDetailPage() {
           >
             สร้างใบเตรียมจ่าย
           </Link>
+        )}
+        {ap.status === "APPROVED" && isManager && (
+          <button
+            onClick={handleUnapprove}
+            disabled={loading}
+            className="border border-amber-300 text-amber-700 px-4 py-2 rounded-lg text-sm font-medium hover:bg-amber-50 disabled:opacity-50 transition-colors"
+          >
+            ยกเลิกอนุมัติ
+          </button>
         )}
         {(ap.status === "PENDING" || ap.status === "APPROVED") && (
           <button
