@@ -1,0 +1,17 @@
+@import "tailwindcss";
+
+@theme {
+  --color-primary: #1e40af;
+  --color-primary-dark: #1e3a8a;
+  --font-sans: "Sarabun", "Noto Sans Thai", system-ui, sans-serif;
+}
+
+body {
+  font-family: "Sarabun", "Noto Sans Thai", system-ui, sans-serif;
+}
+
+@layer utilities {
+  .status-badge {
+    @apply inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium;
+  }
+}

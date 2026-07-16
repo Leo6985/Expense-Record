@@ -1,0 +1,215 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// role: PURCHASING | ACCOUNTING | OWNER
+// level: EMPLOYEE | MANAGER
+model User {
+  id        String   @id @default(cuid())
+  name      String
+  email     String   @unique
+  password  String
+  role      String   @default("PURCHASING")
+  level     String   @default("EMPLOYEE")
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Vendor {
+  id              String   @id @default(cuid())
+  code            String   @unique
+  name            String
+  taxId           String?
+  address         String?
+  contactPerson   String?
+  phone           String?
+  email           String?
+  creditDays      Int      @default(30)
+  bankName        String?
+  bankBranch      String?
+  bankAccountNo   String?
+  bankAccountName String?
+  isActive        Boolean  @default(true)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  purchaseOrders  PurchaseOrder[]
+  accountsPayable AccountsPayable[]
+}
+
+model ChartOfAccount {
+  id        String    @id @default(cuid())
+  code      String    @unique
+  name      String
+  type      String    @default("EXPENSE")
+  isActive  Boolean   @default(true)
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  products  Product[]
+}
+
+model Product {
+  id          String          @id @default(cuid())
+  code        String          @unique
+  name        String
+  description String?
+  unit        String?
+  accountId   String?
+  account     ChartOfAccount? @relation(fields: [accountId], references: [id])
+  isActive    Boolean         @default(true)
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
+
+  poItems     POItem[]
+}
+
+model CompanyBankAccount {
+  id          String    @id @default(cuid())
+  bankName    String
+  branch      String?
+  accountNo   String
+  accountName String
+  isActive    Boolean   @default(true)
+  createdAt   DateTime  @default(now())
+
+  payments    Payment[]
+}
+
+model PurchaseOrder {
+  id            String    @id @default(cuid())
+  poNumber      String    @unique
+  prNumber      String?
+  vendorId      String
+  vendor        Vendor    @relation(fields: [vendorId], references: [id])
+  orderDate     DateTime  @default(now())
+  expectedDate  DateTime?
+  status        String    @default("DRAFT")
+  totalAmount   Float     @default(0)
+  vatRate       Float     @default(7)
+  vatAmount     Float     @default(0)
+  notes         String?
+  createdByName  String?
+  createdById    String?
+  approvedByName String?
+  approvedById   String?
+  approvedAt     DateTime?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  items           POItem[]
+  goodsReceipts   GoodsReceipt[]
+  accountsPayable AccountsPayable[]
+}
+
+model POItem {
+  id          String        @id @default(cuid())
+  poId        String
+  po          PurchaseOrder @relation(fields: [poId], references: [id], onDelete: Cascade)
+  productId   String?
+  product     Product?      @relation(fields: [productId], references: [id])
+  description String
+  quantity    Float
+  unit        String?
+  unitPrice   Float
+  totalPrice  Float
+}
+
+model GoodsReceipt {
+  id            String        @id @default(cuid())
+  grNumber      String        @unique
+  poId          String
+  po            PurchaseOrder @relation(fields: [poId], references: [id])
+  receivedDate  DateTime      @default(now())
+  receivedBy    String?
+  notes         String?
+  createdByName String?
+  createdById   String?
+  createdAt     DateTime      @default(now())
+
+  accountsPayable AccountsPayable[]
+}
+
+model AccountsPayable {
+  id            String         @id @default(cuid())
+  apNumber      String         @unique
+  vendorId      String
+  vendor        Vendor         @relation(fields: [vendorId], references: [id])
+  poId          String?
+  po            PurchaseOrder? @relation(fields: [poId], references: [id])
+  grId          String?
+  gr            GoodsReceipt?  @relation(fields: [grId], references: [id])
+  invoiceNumber String
+  invoiceDate   DateTime
+  dueDate       DateTime
+  amount        Float
+  vatAmount     Float          @default(0)
+  totalAmount   Float
+  status        String         @default("PENDING")
+  notes          String?
+  createdByName  String?
+  createdById    String?
+  approvedByName String?
+  approvedById   String?
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+
+  paymentPrepItems PaymentPrepItem[]
+}
+
+model PaymentPrep {
+  id            String    @id @default(cuid())
+  prepNumber    String    @unique
+  prepDate      DateTime  @default(now())
+  paymentDate   DateTime
+  totalAmount         Float
+  totalWithholdingTax Float     @default(0)
+  netPayableAmount    Float     @default(0)
+  status        String    @default("DRAFT")
+  notes          String?
+  createdByName  String?
+  createdById    String?
+  approvedByName String?
+  approvedById   String?
+  approvedAt     DateTime?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  items   PaymentPrepItem[]
+  payment Payment?
+}
+
+model PaymentPrepItem {
+  id                  String          @id @default(cuid())
+  prepId              String
+  prep                PaymentPrep     @relation(fields: [prepId], references: [id], onDelete: Cascade)
+  apId                String
+  ap                  AccountsPayable @relation(fields: [apId], references: [id])
+  amount              Float
+  withholdingTaxRate  Float           @default(0)
+  withholdingTaxAmount Float          @default(0)
+  netAmount           Float           @default(0)
+}
+
+model Payment {
+  id                   String             @id @default(cuid())
+  paymentNumber        String             @unique
+  prepId               String             @unique
+  prep                 PaymentPrep        @relation(fields: [prepId], references: [id])
+  paymentDate          DateTime
+  paymentMethod        String
+  companyBankAccountId String
+  companyBankAccount   CompanyBankAccount @relation(fields: [companyBankAccountId], references: [id])
+  amount               Float
+  referenceNumber      String?
+  notes                String?
+  createdByName        String?
+  createdById          String?
+  createdAt            DateTime           @default(now())
+}
