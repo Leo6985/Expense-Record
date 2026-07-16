@@ -68,7 +68,7 @@ export default function PaymentPrepDetailPage() {
         paymentDate,
         paymentMethod,
         companyBankAccountId: bankAccountId,
-        amount: prep!.totalAmount,
+        amount: prep!.netPayableAmount,
         referenceNumber: refNo || undefined,
         notes: paymentNotes || undefined,
       });
@@ -156,7 +156,7 @@ export default function PaymentPrepDetailPage() {
             </div>
             <div className="col-span-2 flex gap-2">
               <button type="submit" disabled={loading || !bankAccountId} className="bg-green-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-green-700 disabled:opacity-50">
-                {loading ? "กำลังบันทึก..." : `ยืนยันชำระ ฿${formatCurrency(prep.totalAmount)}`}
+                {loading ? "กำลังบันทึก..." : `ยืนยันชำระ ฿${formatCurrency(prep.netPayableAmount)}`}
               </button>
               <button type="button" onClick={() => setShowPaymentForm(false)} className="border border-gray-300 text-gray-700 px-4 py-2 rounded-lg text-sm hover:bg-gray-50">ยกเลิก</button>
             </div>

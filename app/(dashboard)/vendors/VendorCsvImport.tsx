@@ -62,7 +62,9 @@ function parseCSV(text: string): VendorRow[] {
       contactPerson: obj["contactperson"] || undefined,
       phone: obj["phone"] || undefined,
       email: obj["email"] || undefined,
-      creditDays: obj["creditdays"] ? parseInt(obj["creditdays"]) || 30 : undefined,
+      creditDays: obj["creditdays"] !== "" && !Number.isNaN(parseInt(obj["creditdays"]))
+        ? parseInt(obj["creditdays"])
+        : undefined,
       bankName: obj["bankname"] || undefined,
       bankBranch: obj["bankbranch"] || undefined,
       bankAccountNo: obj["bankaccountno"] || undefined,

@@ -45,7 +45,8 @@ export default function VendorDetailPage() {
     setSuccess(false);
 
     const form = new FormData(e.currentTarget);
-    const creditDays = parseInt(form.get("creditDays") as string) || 30;
+    const creditDaysRaw = parseInt(form.get("creditDays") as string);
+    const creditDays = Number.isNaN(creditDaysRaw) ? 30 : creditDaysRaw;
 
     try {
       await updateVendor(params.id as string, {
