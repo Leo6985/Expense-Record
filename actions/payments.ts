@@ -97,6 +97,34 @@ export async function createPayment(data: {
   return payment;
 }
 
+export async function deletePayment(id: string) {
+  const session = await auth();
+  const u = session?.user as { level?: string; role?: string } | undefined;
+  if (u?.level !== "MANAGER" && u?.role !== "OWNER") throw new Error("เฉพาะผู้จัดการหรือเจ้าของเท่านั้นที่ลบการชำระเงินได้");
+
+  const payment = await prisma.payment.findUnique({
+    where: { id },
+    include: { prep: { include: { items: true } } },
+  });
+  if (!payment) throw new Error("ไม่พบรายการชำระเงิน");
+
+  const apIds = payment.prep.items.map((item) => item.apId);
+
+  await prisma.$transaction(async (tx) => {
+    await tx.payment.delete({ where: { id } });
+    await tx.paymentPrep.update({
+      where: { id: payment.prepId },
+      data: { status: "APPROVED" },
+    });
+    for (const apId of apIds) await syncAPStatus(tx, apId);
+  });
+
+  revalidatePath("/payments");
+  revalidatePath("/payment-prep");
+  revalidatePath(`/payment-prep/${payment.prepId}`);
+  revalidatePath("/accounts-payable");
+}
+
 export async function getCompanyBankAccounts() {
   return prisma.companyBankAccount.findMany({
     where: { isActive: true },

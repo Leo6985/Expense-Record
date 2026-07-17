@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
 import { getPaymentPrep, approvePaymentPrep, unapprovePaymentPrep, cancelPaymentPrep } from "@/actions/payment-prep";
-import { getCompanyBankAccounts, createPayment } from "@/actions/payments";
+import { getCompanyBankAccounts, createPayment, deletePayment } from "@/actions/payments";
 import { formatDate, formatCurrency } from "@/lib/utils";
 import Link from "next/link";
 
@@ -71,6 +71,18 @@ export default function PaymentPrepDetailPage() {
     setLoading(false);
   }
 
+  async function handleDeletePayment() {
+    if (!confirm("ยืนยันการลบการชำระเงินนี้? สถานะใบเตรียมจ่ายจะย้อนกลับเป็นอนุมัติแล้ว")) return;
+    setLoading(true);
+    try {
+      await deletePayment(prep!.payment!.id);
+      setPrep({ ...prep!, status: "APPROVED", payment: null });
+    } catch (err) {
+      alert(err instanceof Error ? err.message : "เกิดข้อผิดพลาด");
+    }
+    setLoading(false);
+  }
+
   async function handlePayment(e: React.FormEvent) {
     e.preventDefault();
     setLoading(true);
@@ -110,7 +122,7 @@ export default function PaymentPrepDetailPage() {
             รอผู้จัดการอนุมัติ
           </span>
         )}
-        {prep.status === "DRAFT" && (
+        {(prep.status === "DRAFT" || prep.status === "APPROVED") && !prep.payment && (
           <Link
             href={`/payment-prep/${params.id}/edit`}
             className="border border-blue-300 text-blue-700 px-4 py-2 rounded-lg text-sm font-medium hover:bg-blue-50 transition-colors"
@@ -131,6 +143,11 @@ export default function PaymentPrepDetailPage() {
         {(prep.status === "DRAFT" || prep.status === "APPROVED") && (
           <button onClick={handleCancel} disabled={loading} className="border border-red-300 text-red-600 px-4 py-2 rounded-lg text-sm font-medium hover:bg-red-50 disabled:opacity-50 transition-colors">
             ยกเลิก
+          </button>
+        )}
+        {prep.status === "PAID" && prep.payment && isManager && (
+          <button onClick={handleDeletePayment} disabled={loading} className="border border-red-300 text-red-600 px-4 py-2 rounded-lg text-sm font-medium hover:bg-red-50 disabled:opacity-50 transition-colors">
+            ลบการชำระเงิน
           </button>
         )}
         <a

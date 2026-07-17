@@ -75,6 +75,26 @@ export async function getMonthlyPurchaseReport(year: number, month: number) {
   });
 }
 
+export async function getMonthlyWithholdingTaxReport(year: number, month: number) {
+  const from = new Date(year, month - 1, 1);
+  const to = new Date(year, month, 0, 23, 59, 59, 999);
+
+  const items = await prisma.paymentPrepItem.findMany({
+    where: {
+      withholdingTaxAmount: { gt: 0 },
+      prep: { payment: { paymentDate: { gte: from, lte: to } } },
+    },
+    include: {
+      ap: { include: { vendor: { select: { name: true, taxId: true, address: true } } } },
+      prep: { include: { payment: true } },
+    },
+  });
+
+  return items
+    .filter((item): item is typeof item & { prep: { payment: NonNullable<typeof item.prep.payment> } } => item.prep.payment !== null)
+    .sort((a, b) => a.prep.payment.paymentDate.getTime() - b.prep.payment.paymentDate.getTime());
+}
+
 export async function getCompanyBankAccounts() {
   return prisma.companyBankAccount.findMany({
     where: { isActive: true },

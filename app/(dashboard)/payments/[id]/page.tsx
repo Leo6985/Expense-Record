@@ -3,6 +3,7 @@ import { formatDate, formatCurrency } from "@/lib/utils";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import PrintBtn from "./PrintBtn";
+import DeleteBtn from "./DeleteBtn";
 
 export default async function PaymentDetailPage({
   params,
@@ -19,7 +20,10 @@ export default async function PaymentDetailPage({
         <Link href="/payments" className="text-gray-400 hover:text-gray-600">← กลับ</Link>
         <h1 className="text-2xl font-bold text-gray-900">{payment.paymentNumber}</h1>
         <span className="inline-flex px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-700">ชำระแล้ว</span>
-        <PrintBtn />
+        <div className="ml-auto flex gap-2">
+          <DeleteBtn paymentId={payment.id} prepId={payment.prepId} />
+          <PrintBtn />
+        </div>
       </div>
 
       <div className="bg-white rounded-xl border border-gray-200 p-5 mb-5">

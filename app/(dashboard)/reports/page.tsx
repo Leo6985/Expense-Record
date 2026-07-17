@@ -41,6 +41,14 @@ const reports = [
     color: "border-indigo-200 bg-indigo-50 hover:bg-indigo-100",
     iconBg: "bg-indigo-100",
   },
+  {
+    href: "/reports/monthly-wht",
+    icon: "🧾",
+    title: "รายงานหัก ณ ที่จ่าย ประจำเดือน",
+    desc: "สรุปรายการภาษีหัก ณ ที่จ่ายรายเดือนแยกตามผู้ขาย",
+    color: "border-rose-200 bg-rose-50 hover:bg-rose-100",
+    iconBg: "bg-rose-100",
+  },
 ];
 
 export default function ReportsPage() {

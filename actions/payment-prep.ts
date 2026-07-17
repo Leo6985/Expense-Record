@@ -140,9 +140,10 @@ export async function updatePaymentPrep(
 ) {
   const prep = await prisma.paymentPrep.findUniqueOrThrow({
     where: { id },
-    include: { items: true },
+    include: { items: true, payment: true },
   });
-  if (prep.status !== "DRAFT") throw new Error("แก้ไขได้เฉพาะใบเตรียมจ่ายที่ยังเป็นร่างเท่านั้น");
+  if (prep.payment) throw new Error("ไม่สามารถแก้ไขได้ เนื่องจากมีการชำระเงินแล้ว");
+  if (prep.status === "CANCELLED") throw new Error("ไม่สามารถแก้ไขใบเตรียมจ่ายที่ยกเลิกแล้วได้");
   if (data.items.length === 0) throw new Error("กรุณาเลือกรายการหนี้อย่างน้อย 1 รายการ");
 
   const oldApIds = prep.items.map((item) => item.apId);

@@ -17,7 +17,7 @@ export default function EditPaymentPrepPage() {
   useEffect(() => {
     getPaymentPrep(params.id as string).then((data) => {
       setPrep(data);
-      if (!data || data.status !== "DRAFT") setNotFoundOrLocked(true);
+      if (!data || data.payment || data.status === "CANCELLED") setNotFoundOrLocked(true);
     });
   }, [params.id]);
 
@@ -31,7 +31,7 @@ export default function EditPaymentPrepPage() {
           <h1 className="text-2xl font-bold text-gray-900">แก้ไข {prep.prepNumber}</h1>
         </div>
         <div className="bg-amber-50 border border-amber-200 text-amber-700 rounded-lg px-4 py-3 text-sm">
-          แก้ไขได้เฉพาะใบเตรียมจ่ายที่ยังเป็นร่างเท่านั้น
+          ไม่สามารถแก้ไขใบเตรียมจ่ายนี้ได้ เนื่องจากมีการชำระเงินแล้วหรือถูกยกเลิกไปแล้ว
         </div>
       </div>
     );
