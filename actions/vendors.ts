@@ -76,7 +76,19 @@ export async function updateVendor(
 }
 
 export async function deleteVendor(id: string) {
-  await prisma.vendor.update({ where: { id }, data: { isActive: false } });
+  const vendor = await prisma.vendor.findUnique({
+    where: { id },
+    include: { _count: { select: { purchaseOrders: true, accountsPayable: true } } },
+  });
+  if (!vendor) return;
+
+  if (vendor._count.purchaseOrders > 0 || vendor._count.accountsPayable > 0) {
+    throw new Error(
+      `ไม่สามารถลบผู้ขาย "${vendor.name}" ได้ เนื่องจากมีใบสั่งซื้อหรือใบตั้งหนี้ผูกอยู่ กรุณาปิดใช้งานแทน`
+    );
+  }
+
+  await prisma.vendor.delete({ where: { id } });
 
   revalidatePath("/vendors");
 }

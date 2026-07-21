@@ -62,6 +62,7 @@ export default function VendorDetailPage() {
         bankBranch: (form.get("bankBranch") as string) || undefined,
         bankAccountNo: (form.get("bankAccountNo") as string) || undefined,
         bankAccountName: (form.get("bankAccountName") as string) || undefined,
+        isActive: form.get("isActive") === "true",
       });
       setSuccess(true);
       setLoading(false);
@@ -85,6 +86,17 @@ export default function VendorDetailPage() {
             <Field label="ชื่อผู้ขาย *" name="name" required defaultValue={vendor.name} />
             <Field label="เลขผู้เสียภาษี" name="taxId" defaultValue={vendor.taxId ?? ""} />
             <Field label="เครดิต (วัน)" name="creditDays" type="number" defaultValue={String(vendor.creditDays)} />
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">สถานะ</label>
+              <select
+                name="isActive"
+                defaultValue={vendor.isActive ? "true" : "false"}
+                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              >
+                <option value="true">ใช้งาน</option>
+                <option value="false">ปิดใช้</option>
+              </select>
+            </div>
           </div>
           <Field label="ที่อยู่" name="address" defaultValue={vendor.address ?? ""} />
         </Section>

@@ -2,6 +2,7 @@ import { getVendors } from "@/actions/vendors";
 import Link from "next/link";
 import { formatDate } from "@/lib/utils";
 import VendorCsvImport from "./VendorCsvImport";
+import DeleteVendorButton from "./DeleteVendorButton";
 
 export default async function VendorsPage({
   searchParams,
@@ -49,12 +50,13 @@ export default async function VendorsPage({
                 <th className="text-left px-4 py-3 font-medium text-gray-600">เครดิต</th>
                 <th className="text-left px-4 py-3 font-medium text-gray-600">สถานะ</th>
                 <th className="text-left px-4 py-3 font-medium text-gray-600">สร้างเมื่อ</th>
+                <th className="text-right px-4 py-3 font-medium text-gray-600">จัดการ</th>
               </tr>
             </thead>
             <tbody>
               {vendors.length === 0 ? (
                 <tr>
-                  <td colSpan={7} className="px-4 py-8 text-center text-gray-400">
+                  <td colSpan={8} className="px-4 py-8 text-center text-gray-400">
                     ไม่พบข้อมูลผู้ขาย
                   </td>
                 </tr>
@@ -82,6 +84,9 @@ export default async function VendorsPage({
                       </span>
                     </td>
                     <td className="px-4 py-3 text-gray-500">{formatDate(vendor.createdAt)}</td>
+                    <td className="px-4 py-3 text-right">
+                      <DeleteVendorButton vendorId={vendor.id} vendorName={vendor.name} />
+                    </td>
                   </tr>
                 ))
               )}
