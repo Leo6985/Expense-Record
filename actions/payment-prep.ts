@@ -3,9 +3,52 @@
 import { prisma } from "@/lib/prisma";
 import { revalidatePath } from "next/cache";
 import { auth } from "@/auth";
-import { syncAPStatus } from "./accounts-payable";
+import { syncAPStatus, syncAPsToSheetById } from "./accounts-payable";
+import {
+  paymentPrepsTable, paymentPrepItemsTable, PaymentPrepRecord, PaymentPrepItemRecord,
+} from "@/lib/sheets-tables";
 
 const AMOUNT_TOLERANCE = 0.01;
+
+/**
+ * Postgres remains authoritative (Payment.prepId still holds a real FK into this table's
+ * id), so every write dual-writes into the Google Sheet as a synced mirror. If the Sheet
+ * side fails, the Postgres write already succeeded — surface the sync failure instead of
+ * silently losing it, but don't roll back the Postgres write.
+ */
+export async function syncPrepToSheet(prep: {
+  id: string;
+  prepNumber: string;
+  prepDate: Date;
+  paymentDate: Date;
+  totalAmount: number;
+  totalWithholdingTax: number;
+  netPayableAmount: number;
+  status: string;
+  notes: string | null;
+  createdByName: string | null;
+  createdById: string | null;
+  approvedByName: string | null;
+  approvedById: string | null;
+  approvedAt: Date | null;
+  createdAt: Date;
+  updatedAt: Date;
+}) {
+  const record: PaymentPrepRecord = { ...prep };
+  try {
+    await paymentPrepsTable.update(prep.id, record);
+  } catch (err) {
+    if (err instanceof Error && err.message.includes("ไม่พบข้อมูล")) {
+      await paymentPrepsTable.create(record);
+    } else {
+      throw err;
+    }
+  }
+}
+
+async function syncPrepItemsToSheet(prepId: string, items: PaymentPrepItemRecord[]) {
+  await paymentPrepItemsTable.replaceWhere((r) => r.prepId === prepId, items);
+}
 
 export async function getPaymentPreps(status?: string) {
   return prisma.paymentPrep.findMany({
@@ -118,12 +161,17 @@ export async function createPaymentPrep(data: {
         createdById,
         items: { create: items },
       },
+      include: { items: true },
     });
 
     for (const item of items) await syncAPStatus(tx, item.apId);
 
     return p;
   });
+
+  await syncPrepToSheet(prep);
+  await syncPrepItemsToSheet(prep.id, prep.items);
+  await syncAPsToSheetById(items.map((i) => i.apId));
 
   revalidatePath("/payment-prep");
   revalidatePath("/accounts-payable");
@@ -150,8 +198,8 @@ export async function updatePaymentPrep(
   const newItems = await buildPrepItems(data.items, id);
   const { totalAmount, totalWithholdingTax, netPayableAmount } = summarize(newItems);
 
-  await prisma.$transaction(async (tx) => {
-    await tx.paymentPrep.update({
+  const updated = await prisma.$transaction(async (tx) => {
+    const p = await tx.paymentPrep.update({
       where: { id },
       data: {
         paymentDate: new Date(data.paymentDate),
@@ -164,11 +212,18 @@ export async function updatePaymentPrep(
           create: newItems,
         },
       },
+      include: { items: true },
     });
 
     const affectedApIds = Array.from(new Set([...oldApIds, ...newItems.map((i) => i.apId)]));
     for (const apId of affectedApIds) await syncAPStatus(tx, apId);
+
+    return p;
   });
+
+  await syncPrepToSheet(updated);
+  await syncPrepItemsToSheet(id, updated.items);
+  await syncAPsToSheetById([...oldApIds, ...newItems.map((i) => i.apId)]);
 
   revalidatePath("/payment-prep");
   revalidatePath(`/payment-prep/${id}`);
@@ -178,12 +233,14 @@ export async function updatePaymentPrep(
 export async function approvePaymentPrep(id: string) {
   const session = await auth();
   const u = session?.user as { level?: string; role?: string; name?: string; id?: string } | undefined;
-  if (u?.level !== "MANAGER" && u?.role !== "OWNER") throw new Error("เน€เธเธเธฒเธฐเธเธนเนเธเธฑเธ”เธเธฒเธฃเธซเธฃเธทเธญเน€เธเนเธฒเธเธญเธเน€เธ—เนเธฒเธเธฑเนเธเธ—เธตเนเธญเธเธธเธกเธฑเธ•เธดเนเธ”เน");
+  if (u?.level !== "MANAGER" && u?.role !== "OWNER") throw new Error("เฉพาะผู้จัดการหรือเจ้าของเท่านั้นที่อนุมัติได้");
 
-  await prisma.paymentPrep.update({
+  const prep = await prisma.paymentPrep.update({
     where: { id },
     data: { status: "APPROVED", approvedByName: u?.name ?? "", approvedById: u?.id ?? "", approvedAt: new Date() },
   });
+  await syncPrepToSheet(prep);
+
   revalidatePath("/payment-prep");
   revalidatePath(`/payment-prep/${id}`);
 }
@@ -201,10 +258,11 @@ export async function unapprovePaymentPrep(id: string) {
   if (prep.status !== "APPROVED") throw new Error("ยกเลิกอนุมัติได้เฉพาะใบเตรียมจ่ายที่อนุมัติแล้วเท่านั้น");
   if (prep.payment) throw new Error("ไม่สามารถยกเลิกอนุมัติได้ เนื่องจากมีการบันทึกการชำระเงินแล้ว");
 
-  await prisma.paymentPrep.update({
+  const updated = await prisma.paymentPrep.update({
     where: { id },
     data: { status: "DRAFT", approvedByName: null, approvedById: null, approvedAt: null },
   });
+  await syncPrepToSheet(updated);
 
   revalidatePath("/payment-prep");
   revalidatePath(`/payment-prep/${id}`);
@@ -220,13 +278,17 @@ export async function cancelPaymentPrep(id: string) {
 
   const apIds = prep.items.map((item) => item.apId);
 
-  await prisma.$transaction(async (tx) => {
-    await tx.paymentPrep.update({
+  const updated = await prisma.$transaction(async (tx) => {
+    const p = await tx.paymentPrep.update({
       where: { id },
       data: { status: "CANCELLED" },
     });
     for (const apId of apIds) await syncAPStatus(tx, apId);
+    return p;
   });
+
+  await syncPrepToSheet(updated);
+  await syncAPsToSheetById(apIds);
 
   revalidatePath("/payment-prep");
   revalidatePath("/accounts-payable");

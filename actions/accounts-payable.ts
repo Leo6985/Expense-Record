@@ -1,11 +1,62 @@
-﻿"use server";
+"use server";
 
 import { prisma } from "@/lib/prisma";
 import { Prisma } from "@prisma/client";
 import { revalidatePath } from "next/cache";
 import { auth } from "@/auth";
+import { accountsPayableTable, AccountsPayableRecord } from "@/lib/sheets-tables";
 
 const AMOUNT_TOLERANCE = 0.01;
+
+/**
+ * Postgres remains authoritative (POItem/GoodsReceiptItem/PaymentPrepItem-adjacent tables
+ * still hold real FKs into this table's id via PO/GR/PaymentPrep), so every write dual-writes
+ * into the Google Sheet as a synced mirror. If the Sheet side fails, the Postgres write already
+ * succeeded — surface the sync failure instead of silently losing it, but don't roll back the
+ * Postgres write.
+ */
+export async function syncAPToSheet(ap: {
+  id: string;
+  apNumber: string;
+  vendorId: string;
+  poId: string | null;
+  grId: string | null;
+  invoiceNumber: string;
+  invoiceDate: Date;
+  dueDate: Date;
+  amount: number;
+  vatAmount: number;
+  totalAmount: number;
+  status: string;
+  notes: string | null;
+  createdByName: string | null;
+  createdById: string | null;
+  approvedByName: string | null;
+  approvedById: string | null;
+  createdAt: Date;
+  updatedAt: Date;
+}) {
+  const record: AccountsPayableRecord = { ...ap };
+  try {
+    await accountsPayableTable.update(ap.id, record);
+  } catch (err) {
+    if (err instanceof Error && err.message.includes("ไม่พบข้อมูล")) {
+      await accountsPayableTable.create(record);
+    } else {
+      throw err;
+    }
+  }
+}
+
+/** Re-fetches each AP by id from Postgres and syncs its current state to the Sheet.
+ * Use after a transaction that may have changed AP status via syncAPStatus() below. */
+export async function syncAPsToSheetById(apIds: string[]) {
+  const uniqueIds = Array.from(new Set(apIds));
+  for (const id of uniqueIds) {
+    const ap = await prisma.accountsPayable.findUnique({ where: { id } });
+    if (ap) await syncAPToSheet(ap);
+  }
+}
 
 // Sums how much of an AP's totalAmount has been committed to non-cancelled payment
 // preps, and reconciles ap.status against it. Called after any prep create/edit/
@@ -109,7 +160,7 @@ export async function createAccountsPayable(data: {
       createdById,
     },
   });
-
+  await syncAPToSheet(ap);
 
   revalidatePath("/accounts-payable");
   return ap;
@@ -118,12 +169,13 @@ export async function createAccountsPayable(data: {
 export async function approveAccountsPayable(id: string) {
   const session = await auth();
   const u = session?.user as { level?: string; role?: string; name?: string; id?: string } | undefined;
-  if (u?.level !== "MANAGER" && u?.role !== "OWNER") throw new Error("เน€เธเธเธฒเธฐเธเธนเนเธเธฑเธ”เธเธฒเธฃเธซเธฃเธทเธญเน€เธเนเธฒเธเธญเธเน€เธ—เนเธฒเธเธฑเนเธเธ—เธตเนเธญเธเธธเธกเธฑเธ•เธดเนเธ”เน");
+  if (u?.level !== "MANAGER" && u?.role !== "OWNER") throw new Error("เฉพาะผู้จัดการหรือเจ้าของเท่านั้นที่อนุมัติได้");
 
-  await prisma.accountsPayable.update({
+  const ap = await prisma.accountsPayable.update({
     where: { id },
     data: { status: "APPROVED", approvedByName: u?.name ?? "", approvedById: u?.id ?? "" },
   });
+  await syncAPToSheet(ap);
 
   revalidatePath("/accounts-payable");
   revalidatePath(`/accounts-payable/${id}`);
@@ -143,20 +195,22 @@ export async function unapproveAccountsPayable(id: string) {
   const hasActivePrep = ap.paymentPrepItems.some((item) => item.prep.status !== "CANCELLED");
   if (hasActivePrep) throw new Error("ไม่สามารถยกเลิกอนุมัติได้ เนื่องจากถูกดึงไปใช้ในใบเตรียมจ่ายแล้ว");
 
-  await prisma.accountsPayable.update({
+  const updated = await prisma.accountsPayable.update({
     where: { id },
     data: { status: "PENDING", approvedByName: null, approvedById: null },
   });
+  await syncAPToSheet(updated);
 
   revalidatePath("/accounts-payable");
   revalidatePath(`/accounts-payable/${id}`);
 }
 
 export async function cancelAccountsPayable(id: string) {
-  await prisma.accountsPayable.update({
+  const ap = await prisma.accountsPayable.update({
     where: { id },
     data: { status: "CANCELLED" },
   });
+  await syncAPToSheet(ap);
 
   revalidatePath("/accounts-payable");
   revalidatePath(`/accounts-payable/${id}`);

@@ -1,8 +1,52 @@
-﻿"use server";
+"use server";
 
 import { prisma } from "@/lib/prisma";
 import { revalidatePath } from "next/cache";
 import { auth } from "@/auth";
+import { purchaseOrdersTable, poItemsTable, PurchaseOrderRecord, POItemRecord } from "@/lib/sheets-tables";
+
+/**
+ * Postgres remains authoritative (GoodsReceipt/AccountsPayable still hold real FKs into
+ * PurchaseOrder.id, and GoodsReceiptItem into POItem.id), so every write dual-writes into
+ * the Google Sheet as a synced mirror. If the Sheet side fails, the Postgres write already
+ * succeeded — surface the sync failure instead of silently losing it, but don't roll back
+ * the Postgres write.
+ */
+export async function syncPOToSheet(po: {
+  id: string;
+  poNumber: string;
+  prNumber: string | null;
+  vendorId: string;
+  orderDate: Date;
+  expectedDate: Date | null;
+  status: string;
+  totalAmount: number;
+  vatRate: number;
+  vatAmount: number;
+  notes: string | null;
+  createdByName: string | null;
+  createdById: string | null;
+  approvedByName: string | null;
+  approvedById: string | null;
+  approvedAt: Date | null;
+  createdAt: Date;
+  updatedAt: Date;
+}) {
+  const record: PurchaseOrderRecord = { ...po };
+  try {
+    await purchaseOrdersTable.update(po.id, record);
+  } catch (err) {
+    if (err instanceof Error && err.message.includes("ไม่พบข้อมูล")) {
+      await purchaseOrdersTable.create(record);
+    } else {
+      throw err;
+    }
+  }
+}
+
+async function syncPOItemsToSheet(poId: string, items: POItemRecord[]) {
+  await poItemsTable.replaceWhere((r) => r.poId === poId, items);
+}
 
 export async function getPurchaseOrders(search?: string, status?: string) {
   return prisma.purchaseOrder.findMany({
@@ -96,8 +140,10 @@ export async function createPurchaseOrder(data: {
         })),
       },
     },
+    include: { items: true },
   });
-
+  await syncPOToSheet(po);
+  await syncPOItemsToSheet(po.id, po.items);
 
   revalidatePath("/purchase-orders");
   return po;
@@ -155,7 +201,10 @@ export async function updatePurchaseOrder(
         })),
       },
     },
+    include: { items: true },
   });
+  await syncPOToSheet(updated);
+  await syncPOItemsToSheet(id, updated.items);
 
   revalidatePath("/purchase-orders");
   revalidatePath(`/purchase-orders/${id}`);
@@ -165,12 +214,13 @@ export async function updatePurchaseOrder(
 export async function approvePurchaseOrder(id: string) {
   const session = await auth();
   const u = session?.user as { level?: string; role?: string; name?: string; id?: string } | undefined;
-  if (u?.level !== "MANAGER" && u?.role !== "OWNER") throw new Error("เน€เธเธเธฒเธฐเธเธนเนเธเธฑเธ”เธเธฒเธฃเธซเธฃเธทเธญเน€เธเนเธฒเธเธญเธเน€เธ—เนเธฒเธเธฑเนเธเธ—เธตเนเธญเธเธธเธกเธฑเธ•เธดเนเธ”เน");
+  if (u?.level !== "MANAGER" && u?.role !== "OWNER") throw new Error("เฉพาะผู้จัดการหรือเจ้าของเท่านั้นที่อนุมัติได้");
 
-  await prisma.purchaseOrder.update({
+  const po = await prisma.purchaseOrder.update({
     where: { id },
     data: { status: "APPROVED", approvedByName: u?.name ?? "", approvedById: u?.id ?? "", approvedAt: new Date() },
   });
+  await syncPOToSheet(po);
 
   revalidatePath("/purchase-orders");
   revalidatePath(`/purchase-orders/${id}`);
@@ -189,10 +239,11 @@ export async function unapprovePurchaseOrder(id: string) {
   if (po.status !== "APPROVED") throw new Error("ยกเลิกอนุมัติได้เฉพาะ PO ที่อนุมัติแล้วเท่านั้น");
   if (po.goodsReceipts.length > 0) throw new Error("ไม่สามารถยกเลิกอนุมัติได้ เนื่องจากมีการรับสินค้าแล้ว กรุณาลบใบรับสินค้าก่อน");
 
-  await prisma.purchaseOrder.update({
+  const updated = await prisma.purchaseOrder.update({
     where: { id },
     data: { status: "DRAFT", approvedByName: null, approvedById: null, approvedAt: null },
   });
+  await syncPOToSheet(updated);
 
   revalidatePath("/purchase-orders");
   revalidatePath(`/purchase-orders/${id}`);
@@ -201,18 +252,21 @@ export async function unapprovePurchaseOrder(id: string) {
 export async function deletePurchaseOrder(id: string) {
   const po = await prisma.purchaseOrder.findUnique({ where: { id } });
   if (!po) return;
-  if (po.status !== "DRAFT") throw new Error("เธฅเธเนเธ”เนเน€เธเธเธฒเธฐ PO เธ—เธตเนเธขเธฑเธเน€เธเนเธเธฃเนเธฒเธเน€เธ—เนเธฒเธเธฑเนเธ");
+  if (po.status !== "DRAFT") throw new Error("ลบได้เฉพาะ PO ที่ยังเป็นร่างเท่านั้น");
 
   await prisma.purchaseOrder.delete({ where: { id } });
+  await purchaseOrdersTable.delete(id);
+  await poItemsTable.deleteWhere((r) => r.poId === id);
 
   revalidatePath("/purchase-orders");
 }
 
 export async function cancelPurchaseOrder(id: string) {
-  await prisma.purchaseOrder.update({
+  const po = await prisma.purchaseOrder.update({
     where: { id },
     data: { status: "CANCELLED" },
   });
+  await syncPOToSheet(po);
 
   revalidatePath("/purchase-orders");
   revalidatePath(`/purchase-orders/${id}`);

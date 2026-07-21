@@ -1,6 +1,7 @@
 "use client";
 
 import { useRef, useState } from "react";
+import * as XLSX from "xlsx";
 import { importProductsCSV } from "@/actions/products";
 
 type ProductRow = {
@@ -13,6 +14,38 @@ type ProductRow = {
 
 type ImportResult = { created: number; updated: number; errors: string[] };
 
+const HEADERS = ["code", "name", "description", "unit", "accountCode"];
+
+const THAI_LABEL_TO_KEY: Record<string, string> = {
+  "รหัส": "code",
+  "ชื่อสินค้า": "name",
+  "คำอธิบาย": "description",
+  "หน่วย": "unit",
+  "รหัสผังบัญชี": "accountCode",
+};
+
+function normalizeKey(header: string): string | undefined {
+  if (THAI_LABEL_TO_KEY[header]) return THAI_LABEL_TO_KEY[header];
+  const flat = header.toLowerCase().replace(/\s/g, "");
+  return HEADERS.find((h) => h.toLowerCase() === flat);
+}
+
+function rowsFromObjects(objects: Record<string, unknown>[]): ProductRow[] {
+  return objects.map((obj) => {
+    const mapped: Record<string, string> = {};
+    for (const [header, value] of Object.entries(obj)) {
+      const key = normalizeKey(header);
+      if (key) mapped[key] = value === undefined || value === null ? "" : String(value).trim();
+    }
+    return {
+      code: mapped["code"] || "",
+      name: mapped["name"] || "",
+      description: mapped["description"] || undefined,
+      unit: mapped["unit"] || undefined,
+      accountCode: mapped["accountCode"] || undefined,
+    };
+  });
+}
 
 function parseCSVLine(line: string): string[] {
   const result: string[] = [];
@@ -36,21 +69,23 @@ function parseCSVLine(line: string): string[] {
 function parseCSV(text: string): ProductRow[] {
   const lines = text.trim().split(/\r?\n/).filter(Boolean);
   if (lines.length < 2) return [];
-  const headers = parseCSVLine(lines[0]).map((h) => h.toLowerCase().replace(/\s/g, ""));
-  return lines.slice(1).map((line) => {
+  const headers = parseCSVLine(lines[0]);
+  const objects = lines.slice(1).map((line) => {
     const values = parseCSVLine(line);
     const obj: Record<string, string> = {};
     headers.forEach((h, i) => { obj[h] = values[i] ?? ""; });
-    return {
-      code: obj["code"] || "",
-      name: obj["name"] || "",
-      description: obj["description"] || undefined,
-      unit: obj["unit"] || undefined,
-      accountCode: obj["accountcode"] || undefined,
-    };
+    return obj;
   });
+  return rowsFromObjects(objects);
 }
 
+async function parseXLSX(file: File): Promise<ProductRow[]> {
+  const buffer = await file.arrayBuffer();
+  const workbook = XLSX.read(buffer, { type: "array" });
+  const sheet = workbook.Sheets[workbook.SheetNames[0]];
+  const objects = XLSX.utils.sheet_to_json<Record<string, unknown>>(sheet, { defval: "" });
+  return rowsFromObjects(objects);
+}
 
 export default function ProductCsvImport() {
   const fileRef = useRef<HTMLInputElement>(null);
@@ -60,13 +95,15 @@ export default function ProductCsvImport() {
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<ImportResult | null>(null);
 
-  function handleFile(e: React.ChangeEvent<HTMLInputElement>) {
+  async function handleFile(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
+    e.target.value = "";
     if (!file) return;
-    const reader = new FileReader();
-    reader.onload = (ev) => {
-      const text = ev.target?.result as string;
-      const parsed = parseCSV(text);
+
+    try {
+      const isExcel = /\.(xlsx|xls)$/i.test(file.name);
+      const parsed = isExcel ? await parseXLSX(file) : parseCSV(await file.text());
+
       if (parsed.length === 0) {
         setParseError("ไม่พบข้อมูลในไฟล์ หรือรูปแบบไม่ถูกต้อง");
         setRows([]);
@@ -75,9 +112,10 @@ export default function ProductCsvImport() {
         setRows(parsed);
         setResult(null);
       }
-    };
-    reader.readAsText(file, "utf-8");
-    e.target.value = "";
+    } catch {
+      setParseError("ไม่สามารถอ่านไฟล์นี้ได้ กรุณาตรวจสอบรูปแบบไฟล์");
+      setRows([]);
+    }
   }
 
   async function handleImport() {
@@ -105,7 +143,7 @@ export default function ProductCsvImport() {
         onClick={() => setOpen(true)}
         className="border border-gray-300 text-gray-700 px-4 py-2 rounded-lg text-sm font-medium hover:bg-gray-50 transition-colors"
       >
-        นำเข้า CSV
+        นำเข้า / ส่งออกข้อมูล
       </button>
 
       {open && (
@@ -113,29 +151,45 @@ export default function ProductCsvImport() {
           <div className="bg-white rounded-2xl shadow-xl w-full max-w-3xl mx-4 max-h-[90vh] flex flex-col">
             {/* Header */}
             <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200">
-              <h2 className="text-lg font-bold text-gray-900">นำเข้าสินค้าและบริการ (CSV)</h2>
+              <h2 className="text-lg font-bold text-gray-900">นำเข้า / ส่งออกสินค้าและบริการ</h2>
               <button onClick={handleClose} className="text-gray-400 hover:text-gray-600 text-xl leading-none">✕</button>
             </div>
 
             <div className="flex-1 overflow-y-auto px-6 py-5 space-y-4">
-              {/* Template + Upload */}
+              {/* Download current data */}
               <div className="flex items-center gap-3 flex-wrap">
+                <a
+                  href="/api/export/products"
+                  className="text-sm text-green-700 hover:underline flex items-center gap-1 font-medium"
+                >
+                  ⬇ ดาวน์โหลดข้อมูลสินค้าปัจจุบันทั้งหมด (.xlsx)
+                </a>
+              </div>
+
+              {/* Template + Upload */}
+              <div className="flex items-center gap-3 flex-wrap pt-2 border-t border-gray-100">
                 <a
                   href="/api/templates/products"
                   download="product_template.csv"
                   className="text-sm text-blue-600 hover:underline flex items-center gap-1"
                 >
-                  ⬇ ดาวน์โหลด Template CSV
+                  ⬇ ดาวน์โหลด Template CSV เปล่า
                 </a>
                 <span className="text-gray-300">|</span>
                 <button
                   onClick={() => fileRef.current?.click()}
                   className="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-blue-700 transition-colors"
                 >
-                  เลือกไฟล์ CSV
+                  เลือกไฟล์เพื่อนำเข้า
                 </button>
-                <input ref={fileRef} type="file" accept=".csv,text/csv" className="hidden" onChange={handleFile} />
-                <span className="text-xs text-gray-400">รองรับ .csv (UTF-8) · ถ้ารหัสซ้ำจะอัปเดตข้อมูล</span>
+                <input
+                  ref={fileRef}
+                  type="file"
+                  accept=".csv,text/csv,.xlsx,.xls,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                  className="hidden"
+                  onChange={handleFile}
+                />
+                <span className="text-xs text-gray-400">รองรับ .csv (UTF-8) และ .xlsx · ถ้ารหัสซ้ำจะอัปเดตข้อมูล</span>
               </div>
 
               {/* Format hint */}

@@ -6,6 +6,7 @@ import {
   createCompanyBankAccount,
   updateCompanyBankAccount,
 } from "@/actions/payments";
+import CompanyBankAccountCsvImport from "./CompanyBankAccountCsvImport";
 
 type Account = {
   id: string;
@@ -57,12 +58,15 @@ export default function CompanyAccountsPage() {
     <div className="max-w-2xl">
       <div className="flex items-center justify-between mb-6">
         <h1 className="text-2xl font-bold text-gray-900">บัญชีธนาคารบริษัท</h1>
-        <button
-          onClick={() => setShowForm(!showForm)}
-          className="bg-blue-700 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-blue-800 transition-colors"
-        >
-          + เพิ่มบัญชี
-        </button>
+        <div className="flex items-center gap-3">
+          <CompanyBankAccountCsvImport />
+          <button
+            onClick={() => setShowForm(!showForm)}
+            className="bg-blue-700 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-blue-800 transition-colors"
+          >
+            + เพิ่มบัญชี
+          </button>
+        </div>
       </div>
 
       {showForm && (

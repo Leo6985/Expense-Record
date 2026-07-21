@@ -37,12 +37,20 @@ export default async function UsersPage() {
     <div>
       <div className="flex items-center justify-between mb-6">
         <h1 className="text-2xl font-bold text-gray-900">จัดการผู้ใช้งาน</h1>
-        <Link
-          href="/users/new"
-          className="bg-blue-700 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-blue-800 transition-colors"
-        >
-          + เพิ่มผู้ใช้งาน
-        </Link>
+        <div className="flex items-center gap-3">
+          <a
+            href="/api/export/users"
+            className="text-sm text-green-700 hover:underline flex items-center gap-1 font-medium"
+          >
+            ⬇ ดาวน์โหลด (.xlsx)
+          </a>
+          <Link
+            href="/users/new"
+            className="bg-blue-700 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-blue-800 transition-colors"
+          >
+            + เพิ่มผู้ใช้งาน
+          </Link>
+        </div>
       </div>
 
       <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">

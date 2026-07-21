@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import { getChartOfAccounts, deleteChartOfAccount } from "@/actions/chart-of-accounts";
 import Link from "next/link";
+import ChartOfAccountCsvImport from "./ChartOfAccountCsvImport";
 
 type Account = Awaited<ReturnType<typeof getChartOfAccounts>>[number];
 
@@ -45,12 +46,15 @@ export default function ChartOfAccountsPage() {
           <h1 className="text-2xl font-bold text-gray-900">ผังบัญชี</h1>
           <p className="text-gray-500 text-sm mt-0.5">กำหนดรหัสบัญชีสำหรับผูกกับสินค้าและบริการ</p>
         </div>
-        <Link
-          href="/chart-of-accounts/new"
-          className="bg-blue-700 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-blue-800 transition-colors"
-        >
-          + เพิ่มบัญชีใหม่
-        </Link>
+        <div className="flex items-center gap-3">
+          <ChartOfAccountCsvImport />
+          <Link
+            href="/chart-of-accounts/new"
+            className="bg-blue-700 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-blue-800 transition-colors"
+          >
+            + เพิ่มบัญชีใหม่
+          </Link>
+        </div>
       </div>
 
       {/* Search */}

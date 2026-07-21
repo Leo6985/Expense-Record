@@ -7,6 +7,12 @@ const ACCOUNTING_PATHS = ["/accounts-payable", "/payment-prep", "/payments", "/c
 const OWNER_ONLY_PATHS = ["/users"];
 const ALL_PATHS = ["/", "/vendors"];
 
+// /api/export/<module> should be gated by the same rule as its /<module> page.
+function toPageEquivalent(pathname: string): string {
+  if (pathname.startsWith("/api/export/")) return "/" + pathname.slice("/api/export/".length);
+  return pathname;
+}
+
 function canAccess(pathname: string, role: string | undefined): boolean {
   if (!role) return false;
   if (role === "OWNER") return true;
@@ -45,7 +51,7 @@ export async function proxy(request: NextRequest) {
 
   // Check role-based access
   const role = (session.user as { role?: string })?.role;
-  if (!canAccess(pathname, role)) {
+  if (!canAccess(toPageEquivalent(pathname), role)) {
     return NextResponse.redirect(new URL("/unauthorized", request.url));
   }
 

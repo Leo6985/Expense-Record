@@ -3,7 +3,65 @@
 import { prisma } from "@/lib/prisma";
 import { revalidatePath } from "next/cache";
 import { auth } from "@/auth";
-import { syncAPStatus } from "./accounts-payable";
+import { syncAPStatus, syncAPsToSheetById } from "./accounts-payable";
+import { syncPrepToSheet } from "./payment-prep";
+import {
+  companyBankAccountsTable, CompanyBankAccountRecord, paymentsTable, PaymentRecord,
+} from "@/lib/sheets-tables";
+
+/** Same dual-write rationale as the other sync helpers in this codebase — see accounts-payable.ts. */
+async function syncPaymentToSheet(payment: {
+  id: string;
+  paymentNumber: string;
+  prepId: string;
+  paymentDate: Date;
+  paymentMethod: string;
+  companyBankAccountId: string;
+  amount: number;
+  referenceNumber: string | null;
+  notes: string | null;
+  createdByName: string | null;
+  createdById: string | null;
+  createdAt: Date;
+}) {
+  const record: PaymentRecord = { ...payment };
+  try {
+    await paymentsTable.update(payment.id, record);
+  } catch (err) {
+    if (err instanceof Error && err.message.includes("ไม่พบข้อมูล")) {
+      await paymentsTable.create(record);
+    } else {
+      throw err;
+    }
+  }
+}
+
+/**
+ * Postgres remains authoritative (Payment.companyBankAccountId still holds a real FK there),
+ * so every write dual-writes into the Google Sheet as a synced mirror. If the Sheet side fails,
+ * the Postgres write already succeeded — surface the sync failure instead of silently losing it,
+ * but don't roll back the Postgres write.
+ */
+async function syncCompanyBankAccountToSheet(account: {
+  id: string;
+  bankName: string;
+  branch: string | null;
+  accountNo: string;
+  accountName: string;
+  isActive: boolean;
+  createdAt: Date;
+}) {
+  const record: CompanyBankAccountRecord = { ...account };
+  try {
+    await companyBankAccountsTable.update(account.id, record);
+  } catch (err) {
+    if (err instanceof Error && err.message.includes("ไม่พบข้อมูล")) {
+      await companyBankAccountsTable.create(record);
+    } else {
+      throw err;
+    }
+  }
+}
 
 export async function getPayments() {
   return prisma.payment.findMany({
@@ -65,7 +123,7 @@ export async function createPayment(data: {
   });
   const apIds = prepBefore.items.map((item) => item.apId);
 
-  const payment = await prisma.$transaction(async (tx) => {
+  const result = await prisma.$transaction(async (tx) => {
     const p = await tx.payment.create({
       data: {
         paymentNumber,
@@ -81,20 +139,24 @@ export async function createPayment(data: {
       },
     });
 
-    await tx.paymentPrep.update({
+    const prep = await tx.paymentPrep.update({
       where: { id: data.prepId },
       data: { status: "PAID" },
     });
 
     for (const apId of apIds) await syncAPStatus(tx, apId);
 
-    return p;
+    return { payment: p, prep };
   });
+
+  await syncPaymentToSheet(result.payment);
+  await syncPrepToSheet(result.prep);
+  await syncAPsToSheetById(apIds);
 
   revalidatePath("/payments");
   revalidatePath("/payment-prep");
   revalidatePath("/accounts-payable");
-  return payment;
+  return result.payment;
 }
 
 export async function deletePayment(id: string) {
@@ -110,14 +172,19 @@ export async function deletePayment(id: string) {
 
   const apIds = payment.prep.items.map((item) => item.apId);
 
-  await prisma.$transaction(async (tx) => {
+  const prep = await prisma.$transaction(async (tx) => {
     await tx.payment.delete({ where: { id } });
-    await tx.paymentPrep.update({
+    const p = await tx.paymentPrep.update({
       where: { id: payment.prepId },
       data: { status: "APPROVED" },
     });
     for (const apId of apIds) await syncAPStatus(tx, apId);
+    return p;
   });
+
+  await paymentsTable.delete(id);
+  await syncPrepToSheet(prep);
+  await syncAPsToSheetById(apIds);
 
   revalidatePath("/payments");
   revalidatePath("/payment-prep");
@@ -139,6 +206,7 @@ export async function createCompanyBankAccount(data: {
   accountName: string;
 }) {
   const account = await prisma.companyBankAccount.create({ data });
+  await syncCompanyBankAccountToSheet(account);
   revalidatePath("/company-accounts");
   return account;
 }
@@ -154,6 +222,59 @@ export async function updateCompanyBankAccount(
   }
 ) {
   const account = await prisma.companyBankAccount.update({ where: { id }, data });
+  await syncCompanyBankAccountToSheet(account);
   revalidatePath("/company-accounts");
   return account;
+}
+
+export async function getAllCompanyBankAccounts() {
+  return prisma.companyBankAccount.findMany({ orderBy: { bankName: "asc" } });
+}
+
+// No field on CompanyBankAccount is unique in the schema — accountNo is used as the natural
+// match key for import purposes (create if no existing row has that accountNo, else update it).
+export async function importCompanyBankAccountsCSV(
+  rows: { bankName: string; branch?: string; accountNo: string; accountName: string }[]
+) {
+  let created = 0;
+  let updated = 0;
+  const errors: string[] = [];
+  const toCreateInSheet: CompanyBankAccountRecord[] = [];
+  const toUpdateInSheet: { id: string; data: Partial<CompanyBankAccountRecord> }[] = [];
+
+  for (const row of rows) {
+    if (!row.bankName || !row.accountNo || !row.accountName) {
+      errors.push(`แถว "${row.accountNo || "?"}" : ต้องมีธนาคาร เลขบัญชี และชื่อบัญชี`);
+      continue;
+    }
+    try {
+      const existing = await prisma.companyBankAccount.findFirst({ where: { accountNo: row.accountNo } });
+      if (existing) {
+        const data = { bankName: row.bankName, branch: row.branch || null, accountName: row.accountName };
+        await prisma.companyBankAccount.update({ where: { id: existing.id }, data });
+        updated++;
+        toUpdateInSheet.push({ id: existing.id, data });
+      } else {
+        const account = await prisma.companyBankAccount.create({
+          data: { bankName: row.bankName, branch: row.branch || null, accountNo: row.accountNo, accountName: row.accountName },
+        });
+        created++;
+        toCreateInSheet.push(account);
+      }
+    } catch {
+      errors.push(`เลขบัญชี ${row.accountNo}: บันทึกไม่สำเร็จ`);
+    }
+  }
+
+  try {
+    if (toCreateInSheet.length > 0) await companyBankAccountsTable.createMany(toCreateInSheet);
+    if (toUpdateInSheet.length > 0) await companyBankAccountsTable.updateMany(toUpdateInSheet);
+  } catch (err) {
+    errors.push(
+      `ข้อมูลถูกบันทึกในระบบหลักแล้ว แต่ซิงค์เข้า Google Sheet ไม่สำเร็จ: ${err instanceof Error ? err.message : String(err)}`
+    );
+  }
+
+  revalidatePath("/company-accounts");
+  return { created, updated, errors };
 }

@@ -11,7 +11,10 @@
     "db:push": "prisma db push",
     "db:migrate": "prisma migrate deploy",
     "db:studio": "prisma studio",
-    "db:seed": "tsx prisma/seed.ts"
+    "db:seed": "tsx prisma/seed.ts",
+    "sheets:setup": "tsx scripts/setup-sheets.ts",
+    "sheets:migrate-master-data": "tsx scripts/migrate-master-data.ts",
+    "sheets:migrate-transactional-data": "tsx scripts/migrate-transactional-data.ts"
   },
   "dependencies": {
     "@hookform/resolvers": "^5.0.1",
@@ -19,6 +22,7 @@
     "bcryptjs": "^2.4.3",
     "clsx": "^2.1.1",
     "date-fns": "^4.1.0",
+    "googleapis": "^173.0.0",
     "jspdf": "^2.5.2",
     "jspdf-autotable": "^3.8.4",
     "lucide-react": "^0.511.0",
@@ -29,6 +33,7 @@
     "react-dom": "^19.0.0",
     "react-hook-form": "^7.56.4",
     "tailwind-merge": "^3.3.0",
+    "xlsx": "^0.18.5",
     "zod": "^3.25.56"
   },
   "devDependencies": {

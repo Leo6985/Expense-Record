@@ -16,12 +16,17 @@ export default async function PaymentPrepPage() {
     <div>
       <div className="flex items-center justify-between mb-6">
         <h1 className="text-2xl font-bold text-gray-900">ใบเตรียมจ่าย</h1>
-        <Link
-          href="/payment-prep/new"
-          className="bg-blue-700 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-blue-800 transition-colors"
-        >
-          + สร้างใบเตรียมจ่าย
-        </Link>
+        <div className="flex items-center gap-3">
+          <a href="/api/export/payment-prep" className="text-sm text-green-700 hover:underline flex items-center gap-1 font-medium">
+            ⬇ ดาวน์โหลด (.xlsx)
+          </a>
+          <Link
+            href="/payment-prep/new"
+            className="bg-blue-700 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-blue-800 transition-colors"
+          >
+            + สร้างใบเตรียมจ่าย
+          </Link>
+        </div>
       </div>
 
       <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">

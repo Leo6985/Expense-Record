@@ -22,12 +22,17 @@ export default async function AccountsPayablePage({
     <div>
       <div className="flex items-center justify-between mb-6">
         <h1 className="text-2xl font-bold text-gray-900">ตั้งหนี้ (AP)</h1>
-        <Link
-          href="/accounts-payable/new"
-          className="bg-blue-700 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-blue-800 transition-colors"
-        >
-          + ตั้งหนี้ใหม่
-        </Link>
+        <div className="flex items-center gap-3">
+          <a href="/api/export/accounts-payable" className="text-sm text-green-700 hover:underline flex items-center gap-1 font-medium">
+            ⬇ ดาวน์โหลด (.xlsx)
+          </a>
+          <Link
+            href="/accounts-payable/new"
+            className="bg-blue-700 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-blue-800 transition-colors"
+          >
+            + ตั้งหนี้ใหม่
+          </Link>
+        </div>
       </div>
 
       <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">

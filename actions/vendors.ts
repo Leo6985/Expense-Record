@@ -1,7 +1,46 @@
-﻿"use server";
+"use server";
 
 import { prisma } from "@/lib/prisma";
+import { vendorsTable, VendorRecord } from "@/lib/sheets-tables";
 import { revalidatePath } from "next/cache";
+
+/**
+ * Postgres remains authoritative (PurchaseOrder/AccountsPayable still hold a real FK to
+ * Vendor.id there), so every write dual-writes into the Google Sheet as a synced mirror.
+ * If the Sheet side fails, the Postgres write already succeeded — surface the sync failure
+ * instead of silently losing it, but don't roll back the Postgres write.
+ */
+async function syncVendorToSheet(vendor: {
+  id: string;
+  code: string;
+  name: string;
+  taxId: string | null;
+  address: string | null;
+  contactPerson: string | null;
+  phone: string | null;
+  email: string | null;
+  creditDays: number;
+  bankName: string | null;
+  bankBranch: string | null;
+  bankAccountNo: string | null;
+  bankAccountName: string | null;
+  isActive: boolean;
+  createdAt: Date;
+  updatedAt: Date;
+}) {
+  const record: VendorRecord = { ...vendor };
+  try {
+    await vendorsTable.update(vendor.id, record);
+  } catch (err) {
+    // row doesn't exist in the sheet yet (e.g. created before the sheet mirror existed) — self-heal.
+    // Any other error (network, quota, auth) must propagate instead of risking a duplicate row.
+    if (err instanceof Error && err.message.includes("ไม่พบข้อมูล")) {
+      await vendorsTable.create(record);
+    } else {
+      throw err;
+    }
+  }
+}
 
 export async function getVendors(search?: string) {
   return prisma.vendor.findMany({
@@ -40,6 +79,7 @@ export async function createVendor(data: {
   if (existing) throw new Error(`รหัสผู้ขาย ${data.code} มีในระบบแล้ว`);
 
   const vendor = await prisma.vendor.create({ data });
+  await syncVendorToSheet(vendor);
 
   revalidatePath("/vendors");
   return vendor;
@@ -69,6 +109,7 @@ export async function updateVendor(
   }
 
   const vendor = await prisma.vendor.update({ where: { id }, data });
+  await syncVendorToSheet(vendor);
 
   revalidatePath("/vendors");
   revalidatePath(`/vendors/${id}`);
@@ -89,6 +130,7 @@ export async function deleteVendor(id: string) {
   }
 
   await prisma.vendor.delete({ where: { id } });
+  await vendorsTable.delete(id);
 
   revalidatePath("/vendors");
 }
@@ -112,34 +154,35 @@ export async function importVendorsCSV(
   let created = 0;
   let updated = 0;
   const errors: string[] = [];
+  const toCreateInSheet: VendorRecord[] = [];
+  const toUpdateInSheet: { id: string; data: Partial<VendorRecord> }[] = [];
 
   for (const row of rows) {
     if (!row.code || !row.name) {
-      errors.push(`เนเธ–เธง "${row.code || "?"}" : เธ•เนเธญเธเธกเธตเธฃเธซเธฑเธชเนเธฅเธฐเธเธทเนเธญเธเธนเนเธเธฒเธข`);
+      errors.push(`แถว "${row.code || "?"}" : ต้องมีรหัสและชื่อผู้ขาย`);
       continue;
     }
     try {
       const existing = await prisma.vendor.findUnique({ where: { code: row.code } });
       if (existing) {
-        await prisma.vendor.update({
-          where: { code: row.code },
-          data: {
-            name: row.name,
-            taxId: row.taxId || null,
-            address: row.address || null,
-            contactPerson: row.contactPerson || null,
-            phone: row.phone || null,
-            email: row.email || null,
-            creditDays: row.creditDays ?? existing.creditDays,
-            bankName: row.bankName || null,
-            bankBranch: row.bankBranch || null,
-            bankAccountNo: row.bankAccountNo || null,
-            bankAccountName: row.bankAccountName || null,
-          },
-        });
+        const data = {
+          name: row.name,
+          taxId: row.taxId || null,
+          address: row.address || null,
+          contactPerson: row.contactPerson || null,
+          phone: row.phone || null,
+          email: row.email || null,
+          creditDays: row.creditDays ?? existing.creditDays,
+          bankName: row.bankName || null,
+          bankBranch: row.bankBranch || null,
+          bankAccountNo: row.bankAccountNo || null,
+          bankAccountName: row.bankAccountName || null,
+        };
+        await prisma.vendor.update({ where: { code: row.code }, data });
         updated++;
+        toUpdateInSheet.push({ id: existing.id, data });
       } else {
-        await prisma.vendor.create({
+        const vendor = await prisma.vendor.create({
           data: {
             code: row.code,
             name: row.name,
@@ -156,12 +199,21 @@ export async function importVendorsCSV(
           },
         });
         created++;
+        toCreateInSheet.push(vendor);
       }
     } catch {
-      errors.push(`เธฃเธซเธฑเธช ${row.code}: เธเธฑเธเธ—เธถเธเนเธกเนเธชเธณเน€เธฃเนเธ`);
+      errors.push(`รหัส ${row.code}: บันทึกไม่สำเร็จ`);
     }
   }
 
+  try {
+    if (toCreateInSheet.length > 0) await vendorsTable.createMany(toCreateInSheet);
+    if (toUpdateInSheet.length > 0) await vendorsTable.updateMany(toUpdateInSheet);
+  } catch (err) {
+    errors.push(
+      `ข้อมูลถูกบันทึกในระบบหลักแล้ว แต่ซิงค์เข้า Google Sheet ไม่สำเร็จ: ${err instanceof Error ? err.message : String(err)}`
+    );
+  }
 
   revalidatePath("/vendors");
   return { created, updated, errors };

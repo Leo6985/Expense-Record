@@ -5,8 +5,46 @@ import { Prisma } from "@prisma/client";
 import { revalidatePath } from "next/cache";
 import { auth } from "@/auth";
 import { addDays } from "date-fns";
+import {
+  goodsReceiptsTable, goodsReceiptItemsTable, GoodsReceiptRecord, GoodsReceiptItemRecord,
+} from "@/lib/sheets-tables";
+import { syncPOToSheet } from "./purchase-orders";
+import { syncAPToSheet } from "./accounts-payable";
 
 const QTY_TOLERANCE = 0.0001;
+
+/**
+ * Postgres remains authoritative (AccountsPayable.grId still holds a real FK into this
+ * table's id), so every write dual-writes into the Google Sheet as a synced mirror. If the
+ * Sheet side fails, the Postgres write already succeeded — surface the sync failure instead
+ * of silently losing it, but don't roll back the Postgres write.
+ */
+async function syncGRToSheet(gr: {
+  id: string;
+  grNumber: string;
+  poId: string;
+  receivedDate: Date;
+  receivedBy: string | null;
+  notes: string | null;
+  createdByName: string | null;
+  createdById: string | null;
+  createdAt: Date;
+}) {
+  const record: GoodsReceiptRecord = { ...gr };
+  try {
+    await goodsReceiptsTable.update(gr.id, record);
+  } catch (err) {
+    if (err instanceof Error && err.message.includes("ไม่พบข้อมูล")) {
+      await goodsReceiptsTable.create(record);
+    } else {
+      throw err;
+    }
+  }
+}
+
+async function syncGRItemsToSheet(grId: string, items: GoodsReceiptItemRecord[]) {
+  await goodsReceiptItemsTable.replaceWhere((r) => r.grId === grId, items);
+}
 
 export async function getGoodsReceipts() {
   return prisma.goodsReceipt.findMany({
@@ -144,10 +182,15 @@ export async function deleteGoodsReceipt(id: string) {
   if (!gr) return;
   for (const ap of gr.accountsPayable) assertGREditable(ap);
 
-  await prisma.$transaction(async (tx) => {
+  const updatedPO = await prisma.$transaction(async (tx) => {
     await tx.goodsReceipt.delete({ where: { id } });
     await recomputePOStatus(tx, gr.poId);
+    return tx.purchaseOrder.findUniqueOrThrow({ where: { id: gr.poId } });
   });
+
+  await goodsReceiptsTable.delete(id);
+  await goodsReceiptItemsTable.deleteWhere((r) => r.grId === id);
+  await syncPOToSheet(updatedPO);
 
   revalidatePath("/goods-receipts");
   revalidatePath("/purchase-orders");
@@ -208,10 +251,11 @@ export async function createGoodsReceipt(data: {
         createdById,
         items: { create: lineItems },
       },
+      include: { items: true },
     });
 
     const apNumber = await getNextAPNumber(tx);
-    await tx.accountsPayable.create({
+    const ap = await tx.accountsPayable.create({
       data: {
         apNumber,
         vendorId: po.vendorId,
@@ -229,15 +273,21 @@ export async function createGoodsReceipt(data: {
     });
 
     await recomputePOStatus(tx, data.poId);
+    const updatedPO = await tx.purchaseOrder.findUniqueOrThrow({ where: { id: data.poId } });
 
-    return gr;
+    return { gr, ap, updatedPO };
   });
+
+  await syncGRToSheet(result.gr);
+  await syncGRItemsToSheet(result.gr.id, result.gr.items);
+  await syncAPToSheet(result.ap);
+  await syncPOToSheet(result.updatedPO);
 
   revalidatePath("/goods-receipts");
   revalidatePath("/purchase-orders");
   revalidatePath(`/purchase-orders/${data.poId}`);
   revalidatePath("/accounts-payable");
-  return result;
+  return result.gr;
 }
 
 export async function updateGoodsReceipt(
@@ -284,8 +334,8 @@ export async function updateGoodsReceipt(
   const invoiceDate = new Date(data.invoiceDate);
   const dueDate = addDays(invoiceDate, gr.po.vendor.creditDays);
 
-  await prisma.$transaction(async (tx) => {
-    await tx.goodsReceipt.update({
+  const result = await prisma.$transaction(async (tx) => {
+    const updatedGR = await tx.goodsReceipt.update({
       where: { id },
       data: {
         receivedDate: new Date(data.receivedDate),
@@ -296,11 +346,13 @@ export async function updateGoodsReceipt(
           create: lineItems,
         },
       },
+      include: { items: true },
     });
 
+    let updatedAP = null;
     const ap = gr.accountsPayable[0];
     if (ap) {
-      await tx.accountsPayable.update({
+      updatedAP = await tx.accountsPayable.update({
         where: { id: ap.id },
         data: {
           invoiceNumber: data.invoiceNumber,
@@ -314,7 +366,15 @@ export async function updateGoodsReceipt(
     }
 
     await recomputePOStatus(tx, gr.poId);
+    const updatedPO = await tx.purchaseOrder.findUniqueOrThrow({ where: { id: gr.poId } });
+
+    return { updatedGR, updatedAP, updatedPO };
   });
+
+  await syncGRToSheet(result.updatedGR);
+  await syncGRItemsToSheet(id, result.updatedGR.items);
+  if (result.updatedAP) await syncAPToSheet(result.updatedAP);
+  await syncPOToSheet(result.updatedPO);
 
   revalidatePath("/goods-receipts");
   revalidatePath(`/goods-receipts/${id}`);

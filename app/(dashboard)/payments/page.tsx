@@ -9,6 +9,9 @@ export default async function PaymentsPage() {
     <div>
       <div className="flex items-center justify-between mb-6">
         <h1 className="text-2xl font-bold text-gray-900">บันทึกการชำระเงิน</h1>
+        <a href="/api/export/payments" className="text-sm text-green-700 hover:underline flex items-center gap-1 font-medium">
+          ⬇ ดาวน์โหลด (.xlsx)
+        </a>
       </div>
       <p className="text-sm text-gray-500 mb-4">การชำระเงินเกิดจากการบันทึกในหน้า ใบเตรียมจ่าย หลังจากอนุมัติแล้ว</p>
 
