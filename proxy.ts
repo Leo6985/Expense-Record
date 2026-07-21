@@ -2,8 +2,8 @@ import { auth } from "@/auth";
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 
-const PURCHASING_PATHS = ["/purchase-orders", "/goods-receipts"];
-const ACCOUNTING_PATHS = ["/accounts-payable", "/payment-prep", "/payments", "/company-accounts", "/reports"];
+const PURCHASING_PATHS = ["/purchase-orders", "/goods-receipts", "/products"];
+const ACCOUNTING_PATHS = ["/accounts-payable", "/payment-prep", "/payments", "/company-accounts", "/reports", "/products", "/chart-of-accounts"];
 const OWNER_ONLY_PATHS = ["/users"];
 const ALL_PATHS = ["/", "/vendors"];
 

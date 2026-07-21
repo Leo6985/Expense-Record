@@ -36,6 +36,9 @@ export async function createVendor(data: {
   bankAccountNo?: string;
   bankAccountName?: string;
 }) {
+  const existing = await prisma.vendor.findUnique({ where: { code: data.code } });
+  if (existing) throw new Error(`รหัสผู้ขาย ${data.code} มีในระบบแล้ว`);
+
   const vendor = await prisma.vendor.create({ data });
 
   revalidatePath("/vendors");
@@ -60,6 +63,11 @@ export async function updateVendor(
     isActive?: boolean;
   }
 ) {
+  if (data.code) {
+    const existing = await prisma.vendor.findFirst({ where: { code: data.code, NOT: { id } } });
+    if (existing) throw new Error(`รหัสผู้ขาย ${data.code} มีในระบบแล้ว`);
+  }
+
   const vendor = await prisma.vendor.update({ where: { id }, data });
 
   revalidatePath("/vendors");

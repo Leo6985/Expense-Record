@@ -1,14 +1,19 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { createVendor } from "@/actions/vendors";
+import { createVendor, getNextVendorCode } from "@/actions/vendors";
 import Link from "next/link";
 
 export default function NewVendorPage() {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [nextCode, setNextCode] = useState("");
+
+  useEffect(() => {
+    getNextVendorCode().then(setNextCode);
+  }, []);
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -53,7 +58,7 @@ export default function NewVendorPage() {
       <form onSubmit={handleSubmit} className="space-y-6">
         <Section title="ข้อมูลทั่วไป">
           <div className="grid grid-cols-2 gap-4">
-            <Field label="รหัสผู้ขาย *" name="code" required placeholder="V00001" />
+            <Field key={nextCode} label="รหัสผู้ขาย *" name="code" required placeholder="V00001" defaultValue={nextCode} />
             <Field label="ชื่อผู้ขาย *" name="name" required placeholder="บริษัท ตัวอย่าง จำกัด" />
             <Field label="เลขผู้เสียภาษี" name="taxId" placeholder="0000000000000" />
             <Field label="เครดิต (วัน)" name="creditDays" type="number" defaultValue="30" />
