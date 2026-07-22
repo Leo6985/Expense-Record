@@ -1,22 +1,32 @@
-import { google, sheets_v4 } from "googleapis";
+import { JWT } from "google-auth-library";
 
-let cachedClient: sheets_v4.Sheets | undefined;
+// Uses google-auth-library + raw REST calls instead of the `googleapis` package on purpose:
+// `googleapis` is ~200MB/1800+ files (it bundles stubs for every Google API), which made
+// Turbopack take 30s+ to compile any route touching this file, and would bloat the Vercel
+// function bundle in production. This only needs the Sheets v4 REST surface.
+
+const SHEETS_API = "https://sheets.googleapis.com/v4/spreadsheets";
+
+let cachedAuth: JWT | undefined;
 let cachedSheetIdByTitle: Map<string, number> | undefined;
 
-function getAuth() {
-  const email = process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL;
-  const key = process.env.GOOGLE_PRIVATE_KEY;
-  if (!email || !key) {
-    throw new Error(
-      "ยังไม่ได้ตั้งค่า GOOGLE_SERVICE_ACCOUNT_EMAIL / GOOGLE_PRIVATE_KEY ใน .env.local"
-    );
+function getAuth(): JWT {
+  if (!cachedAuth) {
+    const email = process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL;
+    const key = process.env.GOOGLE_PRIVATE_KEY;
+    if (!email || !key) {
+      throw new Error(
+        "ยังไม่ได้ตั้งค่า GOOGLE_SERVICE_ACCOUNT_EMAIL / GOOGLE_PRIVATE_KEY ใน .env.local"
+      );
+    }
+    cachedAuth = new JWT({
+      email,
+      // .env stores the key with literal "\n" sequences; convert back to real newlines
+      key: key.replace(/\\n/g, "\n"),
+      scopes: ["https://www.googleapis.com/auth/spreadsheets"],
+    });
   }
-  return new google.auth.JWT({
-    email,
-    // .env stores the key with literal "\n" sequences; convert back to real newlines
-    key: key.replace(/\\n/g, "\n"),
-    scopes: ["https://www.googleapis.com/auth/spreadsheets"],
-  });
+  return cachedAuth;
 }
 
 function getSpreadsheetId() {
@@ -27,21 +37,32 @@ function getSpreadsheetId() {
   return id;
 }
 
-function getClient(): sheets_v4.Sheets {
-  if (!cachedClient) {
-    cachedClient = google.sheets({ version: "v4", auth: getAuth() });
+async function sheetsFetch(path: string, init?: RequestInit): Promise<unknown> {
+  const auth = getAuth();
+  const token = await auth.getAccessToken();
+  const res = await fetch(`${SHEETS_API}/${getSpreadsheetId()}${path}`, {
+    ...init,
+    headers: {
+      ...init?.headers,
+      Authorization: `Bearer ${token.token}`,
+      "Content-Type": "application/json",
+    },
+  });
+  if (!res.ok) {
+    const body = await res.text().catch(() => "");
+    throw new Error(`Google Sheets API ${res.status} ${res.statusText}: ${body}`);
   }
-  return cachedClient;
+  if (res.status === 204) return undefined;
+  return res.json();
 }
 
 /** Numeric sheetId (needed for row-delete requests) for a given tab title, cached per process. */
 async function getSheetIdByTitle(title: string): Promise<number> {
   if (!cachedSheetIdByTitle) {
-    const client = getClient();
-    const meta = await client.spreadsheets.get({ spreadsheetId: getSpreadsheetId() });
-    cachedSheetIdByTitle = new Map(
-      (meta.data.sheets ?? []).map((s) => [s.properties!.title!, s.properties!.sheetId!])
-    );
+    const meta = (await sheetsFetch("")) as {
+      sheets?: { properties: { title: string; sheetId: number } }[];
+    };
+    cachedSheetIdByTitle = new Map((meta.sheets ?? []).map((s) => [s.properties.title, s.properties.sheetId]));
   }
   const sheetId = cachedSheetIdByTitle.get(title);
   if (sheetId === undefined) {
@@ -64,16 +85,24 @@ export type ColumnDef = {
 
 function serializeCell(value: unknown, type: ColumnType): string {
   if (value === null || value === undefined) return "";
-  switch (type) {
-    case "date":
-      return value instanceof Date ? value.toISOString() : String(value);
-    case "boolean":
-      return value ? "TRUE" : "FALSE";
-    case "number":
-      return String(value);
-    default:
-      return String(value);
-  }
+  const raw = (() => {
+    switch (type) {
+      case "date":
+        return value instanceof Date ? value.toISOString() : String(value);
+      case "boolean":
+        return value ? "TRUE" : "FALSE";
+      case "number":
+        return String(value);
+      default:
+        return String(value);
+    }
+  })();
+  // Force plain-text storage (requires valueInputOption=USER_ENTERED to take effect —
+  // Sheets strips this leading apostrophe on write). Without it, Sheets' backend
+  // auto-detects number/date-looking strings and silently reformats them later
+  // (e.g. long digit strings like a 13-digit tax ID become "1.05539E+11"), corrupting
+  // the data even though we do our own type coercion via ColumnDef.type.
+  return `'${raw}`;
 }
 
 function deserializeCell(raw: string | undefined, type: ColumnType): unknown {
@@ -101,6 +130,10 @@ function columnLetter(index: number): string {
     n = Math.floor((n - 1) / 26);
   }
   return s;
+}
+
+function encodeRange(range: string) {
+  return encodeURIComponent(range);
 }
 
 /**
@@ -136,12 +169,8 @@ export class SheetTable<T extends { id: string }> {
 
   /** Returns records with their 0-based data-row index (row 2 in the sheet = index 0). */
   private async readAllWithIndex(): Promise<{ index: number; record: T }[]> {
-    const client = getClient();
-    const res = await client.spreadsheets.values.get({
-      spreadsheetId: getSpreadsheetId(),
-      range: this.range,
-    });
-    const rows = res.data.values ?? [];
+    const res = (await sheetsFetch(`/values/${encodeRange(this.range)}`)) as { values?: string[][] };
+    const rows = res.values ?? [];
     return rows
       .map((row, index) => ({ index, record: this.rowToRecord(row) }))
       .filter((r) => !!r.record.id);
@@ -164,12 +193,9 @@ export class SheetTable<T extends { id: string }> {
 
   async create(data: Omit<T, "id"> & { id?: string }): Promise<T> {
     const record = { ...data, id: data.id ?? crypto.randomUUID() } as T;
-    const client = getClient();
-    await client.spreadsheets.values.append({
-      spreadsheetId: getSpreadsheetId(),
-      range: this.range,
-      valueInputOption: "RAW",
-      requestBody: { values: [this.recordToRow(record)] },
+    await sheetsFetch(`/values/${encodeRange(this.range)}:append?valueInputOption=USER_ENTERED`, {
+      method: "POST",
+      body: JSON.stringify({ values: [this.recordToRow(record)] }),
     });
     return record;
   }
@@ -178,12 +204,9 @@ export class SheetTable<T extends { id: string }> {
   async createMany(dataList: (Omit<T, "id"> & { id?: string })[]): Promise<T[]> {
     if (dataList.length === 0) return [];
     const records = dataList.map((data) => ({ ...data, id: data.id ?? crypto.randomUUID() }) as T);
-    const client = getClient();
-    await client.spreadsheets.values.append({
-      spreadsheetId: getSpreadsheetId(),
-      range: this.range,
-      valueInputOption: "RAW",
-      requestBody: { values: records.map((r) => this.recordToRow(r)) },
+    await sheetsFetch(`/values/${encodeRange(this.range)}:append?valueInputOption=USER_ENTERED`, {
+      method: "POST",
+      body: JSON.stringify({ values: records.map((r) => this.recordToRow(r)) }),
     });
     return records;
   }
@@ -194,15 +217,12 @@ export class SheetTable<T extends { id: string }> {
     if (!found) throw new Error(`ไม่พบข้อมูล id=${id} ใน ${this.tabName}`);
 
     const updated = { ...found.record, ...data } as T;
-    const client = getClient();
     const sheetRow = found.index + 2; // +1 for header row, +1 for 1-based sheet rows
     const lastCol = columnLetter(this.columns.length - 1);
-    await client.spreadsheets.values.update({
-      spreadsheetId: getSpreadsheetId(),
-      range: `${this.tabName}!A${sheetRow}:${lastCol}${sheetRow}`,
-      valueInputOption: "RAW",
-      requestBody: { values: [this.recordToRow(updated)] },
-    });
+    await sheetsFetch(
+      `/values/${encodeRange(`${this.tabName}!A${sheetRow}:${lastCol}${sheetRow}`)}?valueInputOption=USER_ENTERED`,
+      { method: "PUT", body: JSON.stringify({ values: [this.recordToRow(updated)] }) }
+    );
     return updated;
   }
 
@@ -227,10 +247,9 @@ export class SheetTable<T extends { id: string }> {
       .filter((d): d is NonNullable<typeof d> => d !== null);
 
     if (data.length === 0) return;
-    const client = getClient();
-    await client.spreadsheets.values.batchUpdate({
-      spreadsheetId: getSpreadsheetId(),
-      requestBody: { valueInputOption: "RAW", data },
+    await sheetsFetch("/values:batchUpdate", {
+      method: "POST",
+      body: JSON.stringify({ valueInputOption: "USER_ENTERED", data }),
     });
   }
 
@@ -248,10 +267,9 @@ export class SheetTable<T extends { id: string }> {
     // Delete from the bottom up within one batchUpdate so earlier deletions don't shift
     // the row indices that later requests in the same batch still reference.
     const sortedDesc = [...matches].sort((a, b) => b.index - a.index);
-    const client = getClient();
-    await client.spreadsheets.batchUpdate({
-      spreadsheetId: getSpreadsheetId(),
-      requestBody: {
+    await sheetsFetch(":batchUpdate", {
+      method: "POST",
+      body: JSON.stringify({
         requests: sortedDesc.map(({ index }) => ({
           deleteDimension: {
             range: {
@@ -262,7 +280,7 @@ export class SheetTable<T extends { id: string }> {
             },
           },
         })),
-      },
+      }),
     });
   }
 
@@ -276,22 +294,19 @@ export class SheetTable<T extends { id: string }> {
 
 /** Creates a tab with the given header row if it doesn't already exist. Safe to call repeatedly. */
 export async function ensureTab(tabName: string, columns: ColumnDef[]): Promise<void> {
-  const client = getClient();
-  const meta = await client.spreadsheets.get({ spreadsheetId: getSpreadsheetId() });
-  const exists = (meta.data.sheets ?? []).some((s) => s.properties?.title === tabName);
+  const meta = (await sheetsFetch("")) as { sheets?: { properties?: { title?: string } }[] };
+  const exists = (meta.sheets ?? []).some((s) => s.properties?.title === tabName);
 
   if (!exists) {
-    await client.spreadsheets.batchUpdate({
-      spreadsheetId: getSpreadsheetId(),
-      requestBody: { requests: [{ addSheet: { properties: { title: tabName } } }] },
+    await sheetsFetch(":batchUpdate", {
+      method: "POST",
+      body: JSON.stringify({ requests: [{ addSheet: { properties: { title: tabName } } }] }),
     });
     invalidateSheetIdCache();
   }
 
-  await client.spreadsheets.values.update({
-    spreadsheetId: getSpreadsheetId(),
-    range: `${tabName}!A1`,
-    valueInputOption: "RAW",
-    requestBody: { values: [columns.map((c) => c.key)] },
+  await sheetsFetch(`/values/${encodeRange(`${tabName}!A1`)}?valueInputOption=USER_ENTERED`, {
+    method: "PUT",
+    body: JSON.stringify({ values: [columns.map((c) => c.key)] }),
   });
 }
