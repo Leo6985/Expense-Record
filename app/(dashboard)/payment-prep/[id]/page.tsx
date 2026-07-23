@@ -264,7 +264,19 @@ export default function PaymentPrepDetailPage() {
 
       {prep.payment && (
         <div className="bg-green-50 border border-green-200 rounded-xl p-5">
-          <h2 className="font-semibold text-green-900 mb-3">ข้อมูลการชำระเงิน</h2>
+          <div className="flex items-center justify-between mb-3">
+            <h2 className="font-semibold text-green-900">ข้อมูลการชำระเงิน</h2>
+            {prep.items.some((item) => item.withholdingTaxAmount > 0) && (
+              <a
+                href={`/payments/${prep.payment.id}/wht`}
+                target="_blank"
+                rel="noreferrer"
+                className="border border-red-300 text-red-700 bg-white px-3 py-1.5 rounded-lg text-xs font-medium hover:bg-red-50"
+              >
+                🧾 ดาวน์โหลดหนังสือรับรองหัก ณ ที่จ่าย
+              </a>
+            )}
+          </div>
           <div className="grid grid-cols-2 gap-3 text-sm">
             <div><div className="text-xs text-gray-500">เลขที่ชำระ</div><div className="font-mono font-medium">{prep.payment.paymentNumber}</div></div>
             <div><div className="text-xs text-gray-500">วันที่ชำระ</div><div className="font-medium">{formatDate(prep.payment.paymentDate)}</div></div>

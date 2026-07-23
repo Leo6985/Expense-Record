@@ -110,6 +110,7 @@ export default async function PaymentPrepPrintPage({
               <div key={item.id} className="flex items-baseline justify-between gap-4 border-b border-dashed border-gray-200 pb-1.5">
                 <span className="text-gray-800">
                   <span className="text-gray-400 mr-1">{idx + 1}.</span>
+                  {item.ap.vendor.bankName ? `${item.ap.vendor.bankName} - ` : ""}
                   {item.ap.vendor.bankAccountName ?? "-"}
                 </span>
                 <span className="text-gray-600 font-mono text-xs">{item.ap.vendor.bankAccountNo ?? "-"}</span>

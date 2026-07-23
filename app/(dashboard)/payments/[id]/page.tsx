@@ -14,6 +14,8 @@ export default async function PaymentDetailPage({
   const payment = await getPayment(id);
   if (!payment) notFound();
 
+  const hasWithholdingTax = payment.prep.items.some((item) => item.withholdingTaxAmount > 0);
+
   return (
     <div className="max-w-3xl">
       <div className="flex items-center gap-3 mb-6">
@@ -22,6 +24,16 @@ export default async function PaymentDetailPage({
         <span className="inline-flex px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-700">ชำระแล้ว</span>
         <div className="ml-auto flex gap-2 print:hidden">
           <DeleteBtn paymentId={payment.id} prepId={payment.prepId} />
+          {hasWithholdingTax && (
+            <a
+              href={`/payments/${payment.id}/wht`}
+              target="_blank"
+              rel="noreferrer"
+              className="border border-red-300 text-red-700 px-4 py-2 rounded-lg text-sm hover:bg-red-50"
+            >
+              🧾 ดาวน์โหลดหนังสือรับรองหัก ณ ที่จ่าย
+            </a>
+          )}
           <PrintBtn />
         </div>
       </div>
