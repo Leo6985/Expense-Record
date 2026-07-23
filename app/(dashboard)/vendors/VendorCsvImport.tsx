@@ -2,7 +2,7 @@
 
 import { useRef, useState } from "react";
 import * as XLSX from "xlsx";
-import { importVendorsCSV } from "@/actions/vendors";
+import { importVendorsCSV, previewFullSyncDeletions } from "@/actions/vendors";
 
 type VendorRow = {
   code: string;
@@ -19,7 +19,9 @@ type VendorRow = {
   bankAccountName?: string;
 };
 
-type ImportResult = { created: number; updated: number; errors: string[] };
+type ImportResult = { created: number; updated: number; deleted: number; errors: string[] };
+type VendorRef = { id: string; code: string; name: string };
+type DeletePreview = { deletable: VendorRef[]; blocked: VendorRef[] };
 
 const HEADERS = [
   "code", "name", "taxId", "address", "contactPerson",
@@ -123,6 +125,19 @@ export default function VendorCsvImport() {
   const [parseError, setParseError] = useState("");
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<ImportResult | null>(null);
+  const [fullSync, setFullSync] = useState(false);
+  const [deletePreview, setDeletePreview] = useState<DeletePreview | null>(null);
+  const [previewLoading, setPreviewLoading] = useState(false);
+
+  async function loadDeletePreview(parsedRows: VendorRow[]) {
+    setPreviewLoading(true);
+    try {
+      const preview = await previewFullSyncDeletions(parsedRows.map((r) => r.code));
+      setDeletePreview(preview);
+    } finally {
+      setPreviewLoading(false);
+    }
+  }
 
   async function handleFile(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
@@ -136,24 +151,45 @@ export default function VendorCsvImport() {
       if (parsed.length === 0) {
         setParseError("ไม่พบข้อมูลในไฟล์ หรือรูปแบบไม่ถูกต้อง");
         setRows([]);
+        setDeletePreview(null);
       } else {
         setParseError("");
         setRows(parsed);
         setResult(null);
+        if (fullSync) await loadDeletePreview(parsed);
       }
     } catch {
       setParseError("ไม่สามารถอ่านไฟล์นี้ได้ กรุณาตรวจสอบรูปแบบไฟล์");
       setRows([]);
+      setDeletePreview(null);
+    }
+  }
+
+  async function handleFullSyncToggle(checked: boolean) {
+    setFullSync(checked);
+    if (checked && rows.length > 0) {
+      await loadDeletePreview(rows);
+    } else {
+      setDeletePreview(null);
     }
   }
 
   async function handleImport() {
     if (rows.length === 0) return;
+
+    if (fullSync && deletePreview && deletePreview.deletable.length > 0) {
+      const ok = confirm(
+        `โหมด Sync เต็ม: ระบบจะลบผู้ขาย ${deletePreview.deletable.length} รายการที่ไม่มีในไฟล์นี้ออกจากระบบถาวร ยืนยันหรือไม่?`
+      );
+      if (!ok) return;
+    }
+
     setLoading(true);
     try {
-      const res = await importVendorsCSV(rows);
+      const res = await importVendorsCSV(rows, { fullSync });
       setResult(res);
       setRows([]);
+      setDeletePreview(null);
     } finally {
       setLoading(false);
     }
@@ -164,6 +200,8 @@ export default function VendorCsvImport() {
     setRows([]);
     setResult(null);
     setParseError("");
+    setFullSync(false);
+    setDeletePreview(null);
   }
 
   return (
@@ -221,6 +259,20 @@ export default function VendorCsvImport() {
                 <span className="text-xs text-gray-400">รองรับ .csv (UTF-8) และ .xlsx · ถ้ารหัสซ้ำจะอัปเดตข้อมูล</span>
               </div>
 
+              {/* Full sync toggle */}
+              <label className="flex items-start gap-2 pt-2 border-t border-gray-100 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={fullSync}
+                  onChange={(e) => handleFullSyncToggle(e.target.checked)}
+                  className="mt-0.5"
+                />
+                <span className="text-sm text-gray-700">
+                  <span className="font-medium">โหมด Sync เต็ม</span> — ลบผู้ขายที่มีอยู่ในระบบแต่{" "}
+                  <span className="underline">ไม่มีรหัสอยู่ในไฟล์นี้</span> ออกจากระบบ (ผู้ขายที่มีใบสั่งซื้อ/ใบตั้งหนี้ผูกอยู่จะถูกข้ามไม่ลบให้อัตโนมัติ)
+                </span>
+              </label>
+
               {/* Format hint */}
               <div className="bg-gray-50 rounded-lg px-4 py-3 text-xs text-gray-500 font-mono break-all">
                 {HEADERS.join(",")}
@@ -230,11 +282,50 @@ export default function VendorCsvImport() {
                 <div className="bg-red-50 border border-red-200 text-red-700 rounded-lg px-4 py-3 text-sm">{parseError}</div>
               )}
 
+              {/* Full sync deletion preview */}
+              {fullSync && rows.length > 0 && (
+                previewLoading ? (
+                  <div className="text-sm text-gray-400">กำลังตรวจสอบรายการที่จะลบ...</div>
+                ) : deletePreview && (deletePreview.deletable.length > 0 || deletePreview.blocked.length > 0) ? (
+                  <div className="bg-red-50 border border-red-200 rounded-lg px-4 py-3 text-sm space-y-2">
+                    {deletePreview.deletable.length > 0 && (
+                      <div>
+                        <p className="font-semibold text-red-700 mb-1">
+                          จะลบผู้ขาย {deletePreview.deletable.length} รายการที่ไม่มีในไฟล์นี้:
+                        </p>
+                        <ul className="text-red-600 space-y-0.5 max-h-32 overflow-y-auto">
+                          {deletePreview.deletable.map((v) => (
+                            <li key={v.id}>• {v.code} — {v.name}</li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
+                    {deletePreview.blocked.length > 0 && (
+                      <div>
+                        <p className="font-semibold text-yellow-700 mb-1">
+                          ข้ามการลบ {deletePreview.blocked.length} รายการ (มีใบสั่งซื้อ/ใบตั้งหนี้ผูกอยู่):
+                        </p>
+                        <ul className="text-yellow-700 space-y-0.5 max-h-32 overflow-y-auto">
+                          {deletePreview.blocked.map((v) => (
+                            <li key={v.id}>• {v.code} — {v.name}</li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  <div className="text-sm text-gray-400">ไม่มีผู้ขายที่ต้องลบ — ทุกรหัสในระบบมีอยู่ในไฟล์นี้แล้ว</div>
+                )
+              )}
+
               {/* Result */}
               {result && (
                 <div className={`rounded-lg px-4 py-3 text-sm border ${result.errors.length > 0 ? "bg-yellow-50 border-yellow-200" : "bg-green-50 border-green-200"}`}>
                   <p className="font-semibold mb-1 text-gray-800">นำเข้าเสร็จสิ้น</p>
-                  <p className="text-green-700">สร้างใหม่ {result.created} รายการ · อัปเดต {result.updated} รายการ</p>
+                  <p className="text-green-700">
+                    สร้างใหม่ {result.created} รายการ · อัปเดต {result.updated} รายการ
+                    {result.deleted > 0 && <> · ลบ {result.deleted} รายการ</>}
+                  </p>
                   {result.errors.length > 0 && (
                     <ul className="mt-2 space-y-1 text-red-600">
                       {result.errors.map((e, i) => <li key={i}>• {e}</li>)}
@@ -286,10 +377,18 @@ export default function VendorCsvImport() {
               {rows.length > 0 && (
                 <button
                   onClick={handleImport}
-                  disabled={loading}
-                  className="bg-green-600 text-white px-5 py-2 rounded-lg text-sm font-medium hover:bg-green-700 disabled:opacity-50"
+                  disabled={loading || previewLoading}
+                  className={`text-white px-5 py-2 rounded-lg text-sm font-medium disabled:opacity-50 ${
+                    fullSync && deletePreview && deletePreview.deletable.length > 0
+                      ? "bg-red-600 hover:bg-red-700"
+                      : "bg-green-600 hover:bg-green-700"
+                  }`}
                 >
-                  {loading ? "กำลังนำเข้า..." : `ยืนยันนำเข้า ${rows.length} รายการ`}
+                  {loading
+                    ? "กำลังนำเข้า..."
+                    : fullSync && deletePreview && deletePreview.deletable.length > 0
+                    ? `ยืนยันนำเข้า ${rows.length} รายการ + ลบ ${deletePreview.deletable.length} รายการ`
+                    : `ยืนยันนำเข้า ${rows.length} รายการ`}
                 </button>
               )}
             </div>

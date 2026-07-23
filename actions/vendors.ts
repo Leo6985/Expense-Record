@@ -145,6 +145,30 @@ export async function deleteVendor(id: string) {
   revalidatePath("/vendors");
 }
 
+/**
+ * For "full sync" import preview: vendors currently in the system whose code is absent
+ * from the uploaded file, split by whether deleting them is actually safe (no linked
+ * PO/AP records) — mirrors the guard in deleteVendor.
+ */
+export async function previewFullSyncDeletions(codesInFile: string[]) {
+  const codeSet = new Set(codesInFile.filter(Boolean));
+  if (codeSet.size === 0) return { deletable: [], blocked: [] };
+
+  const candidates = await prisma.vendor.findMany({
+    where: { code: { notIn: Array.from(codeSet) } },
+    include: { _count: { select: { purchaseOrders: true, accountsPayable: true } } },
+  });
+
+  const deletable = candidates
+    .filter((v) => v._count.purchaseOrders === 0 && v._count.accountsPayable === 0)
+    .map((v) => ({ id: v.id, code: v.code, name: v.name }));
+  const blocked = candidates
+    .filter((v) => v._count.purchaseOrders > 0 || v._count.accountsPayable > 0)
+    .map((v) => ({ id: v.id, code: v.code, name: v.name }));
+
+  return { deletable, blocked };
+}
+
 export async function importVendorsCSV(
   rows: {
     code: string;
@@ -159,10 +183,12 @@ export async function importVendorsCSV(
     bankBranch?: string;
     bankAccountNo?: string;
     bankAccountName?: string;
-  }[]
+  }[],
+  options?: { fullSync?: boolean }
 ) {
   let created = 0;
   let updated = 0;
+  let deleted = 0;
   const errors: string[] = [];
   const toCreateInSheet: VendorRecord[] = [];
   const toUpdateInSheet: { id: string; data: Partial<VendorRecord> }[] = [];
@@ -225,8 +251,31 @@ export async function importVendorsCSV(
     );
   }
 
+  if (options?.fullSync) {
+    const { deletable, blocked } = await previewFullSyncDeletions(rows.map((r) => r.code));
+
+    if (deletable.length > 0) {
+      const deletableIds = deletable.map((v) => v.id);
+      await prisma.vendor.deleteMany({ where: { id: { in: deletableIds } } });
+      deleted = deletable.length;
+      try {
+        await vendorsTable.deleteWhere((r) => deletableIds.includes(r.id));
+      } catch (err) {
+        errors.push(
+          `ลบผู้ขาย ${deleted} รายการในระบบหลักแล้ว แต่ลบใน Google Sheet ไม่สำเร็จ: ${err instanceof Error ? err.message : String(err)}`
+        );
+      }
+    }
+
+    for (const v of blocked) {
+      errors.push(
+        `ไม่สามารถลบผู้ขาย "${v.name}" (${v.code}) ได้ เนื่องจากมีใบสั่งซื้อหรือใบตั้งหนี้ผูกอยู่ กรุณาปิดใช้งานแทน`
+      );
+    }
+  }
+
   revalidatePath("/vendors");
-  return { created, updated, errors };
+  return { created, updated, deleted, errors };
 }
 
 export async function getNextVendorCode() {
