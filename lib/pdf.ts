@@ -247,51 +247,51 @@ export function exportWHTCertificatePDF(paymentNumber: string, certs: WHTCertifi
     const rates = Array.from(new Set(cert.items.map((i) => i.withholdingTaxRate)));
     const rateLabel = rates.length === 1 ? String(rates[0]) : "หลายอัตรา";
 
-    let y = 16;
+    let y = 18;
 
     // Copy note (left) + book/running number (right)
     doc.setFont("Sarabun", "normal");
-    doc.setFontSize(7);
+    doc.setFontSize(7.5);
     doc.text("ฉบับที่ 1 (สำหรับผู้ถูกหักภาษี ณ ที่จ่าย ใช้แนบพร้อมกับแบบแสดงรายการภาษี)", left, y);
-    doc.text("ฉบับที่ 2 (สำหรับผู้ถูกหักภาษี ณ ที่จ่าย เก็บไว้เป็นหลักฐาน)", left, y + 3.2);
+    doc.text("ฉบับที่ 2 (สำหรับผู้ถูกหักภาษี ณ ที่จ่าย เก็บไว้เป็นหลักฐาน)", left, y + 4);
     doc.text("เล่มที่ ..........................", right, y, { align: "right" });
-    doc.text(`เลขที่ ${cert.certNumber}`, right, y + 3.2, { align: "right" });
-    y += 9;
+    doc.text(`เลขที่ ${cert.certNumber}`, right, y + 4, { align: "right" });
+    y += 11;
 
     // Title
     doc.setFont("Sarabun", "bold");
-    doc.setFontSize(13);
+    doc.setFontSize(15);
     doc.text("หนังสือรับรองการหักภาษี ณ ที่จ่าย", 105, y, { align: "center" });
-    y += 5;
+    y += 6;
     doc.setFont("Sarabun", "normal");
-    doc.setFontSize(9.5);
+    doc.setFontSize(10.5);
     doc.text("ตามมาตรา 50 ทวิ แห่งประมวลรัษฎากร", 105, y, { align: "center" });
-    y += 4;
+    y += 5;
 
     doc.setLineWidth(0.5);
     doc.line(left, y, right, y);
-    y += 5;
+    y += 6;
 
     // Payer / payee boxes
     const party = (label: string, name: string, address: string, taxId: string) => {
-      doc.setFontSize(8.5);
+      doc.setFontSize(9.5);
       doc.setFont("Sarabun", "bold");
       doc.text(label, left, y);
       doc.setFont("Sarabun", "normal");
       doc.text(`เลขประจำตัวผู้เสียภาษีอากร (13 หลัก)* ${taxId || "-"}`, right, y, { align: "right" });
-      y += 4.5;
+      y += 5;
       doc.text(`ชื่อ ${name}`, left, y);
-      y += 3.5;
-      doc.setFontSize(6.3);
+      y += 3.8;
+      doc.setFontSize(7);
       doc.setTextColor(120);
       doc.text("(ให้ระบุว่าเป็น บุคคล นิติบุคคล บริษัท สมาคม หรือคณะบุคคล)", left, y);
       doc.setTextColor(0);
-      y += 4;
-      doc.setFontSize(8.5);
+      y += 4.5;
+      doc.setFontSize(9.5);
       const addrLines = doc.splitTextToSize(`ที่อยู่ ${address}`, width - 4);
       doc.text(addrLines, left, y);
-      y += addrLines.length * 3.8;
-      doc.setFontSize(6.3);
+      y += addrLines.length * 4.2;
+      doc.setFontSize(7);
       doc.setTextColor(120);
       doc.text(
         "(ให้ระบุชื่ออาคาร/หมู่บ้าน ห้องเลขที่ ชั้นที่ เลขที่ ตรอก/ซอย หมู่ที่ ถนน ตำบล/แขวง อำเภอ/เขต จังหวัด)",
@@ -299,43 +299,43 @@ export function exportWHTCertificatePDF(paymentNumber: string, certs: WHTCertifi
         y
       );
       doc.setTextColor(0);
-      y += 4.5;
+      y += 5;
     };
 
     party("ผู้มีหน้าที่หักภาษี ณ ที่จ่าย : -", COMPANY.name, COMPANY.address, COMPANY.taxId);
     doc.setLineWidth(0.3);
     doc.line(left, y, right, y);
-    y += 4;
+    y += 5;
 
     party("ผู้ถูกหักภาษี ณ ที่จ่าย : -", cert.vendor.name, cert.vendor.address ?? "-", cert.vendor.taxId ?? "-");
     doc.setLineWidth(0.5);
     doc.line(left, y, right, y);
-    y += 4.5;
+    y += 5.5;
 
     // PND running-number checkboxes
-    doc.setFontSize(7.5);
+    doc.setFontSize(8.5);
     doc.text("ลำดับที่ ______________ ในแบบ", left, y);
-    y += 4;
+    y += 4.5;
     let cx = left;
     PND_OPTIONS.forEach((label, i) => {
       const s = `☐ (${i + 1}) ${label}`;
-      const w = doc.getTextWidth(s) + 4;
+      const w = doc.getTextWidth(s) + 5;
       if (cx + w > right) {
         cx = left;
-        y += 4;
+        y += 4.5;
       }
       doc.text(s, cx, y);
       cx += w;
     });
-    y += 4;
-    doc.setFontSize(6.3);
+    y += 4.5;
+    doc.setFontSize(7);
     doc.setTextColor(120);
     doc.text("(ให้สามารถอ้างอิงหรือสอบยันกันได้ระหว่างลำดับที่ตามหนังสือรับรองฯ กับแบบยื่นรายการภาษีหักที่จ่าย)", left, y);
     doc.setTextColor(0);
-    y += 3.5;
+    y += 4;
     doc.setLineWidth(0.5);
     doc.line(left, y, right, y);
-    y += 2;
+    y += 3;
 
     // Income type table
     const incomeRows: (string | { content: string; styles?: Record<string, unknown> })[][] = [
@@ -363,8 +363,8 @@ export function exportWHTCertificatePDF(paymentNumber: string, certs: WHTCertifi
       margin: { left, right: 12 },
       head: [["ประเภทเงินได้พึงประเมินที่จ่าย", "วัน เดือน หรือปีภาษี ที่จ่าย", "จำนวนเงินที่จ่าย", "ภาษีที่หัก และนำส่งไว้"]],
       body: incomeRows,
-      styles: { font: "Sarabun", fontSize: 7.8, cellPadding: 1.3, lineColor: 0, lineWidth: 0.2, valign: "top" },
-      headStyles: { fillColor: [255, 255, 255], textColor: 0, fontStyle: "normal", halign: "center", valign: "bottom" },
+      styles: { font: "Sarabun", fontSize: 8.5, cellPadding: 1.8, minCellHeight: 7, lineColor: 0, lineWidth: 0.2, valign: "top" },
+      headStyles: { fillColor: [255, 255, 255], textColor: 0, fontStyle: "normal", halign: "center", valign: "bottom", minCellHeight: 9 },
       columnStyles: {
         0: { cellWidth: width - 3 * 22 },
         1: { cellWidth: 22, halign: "center" },
@@ -374,74 +374,79 @@ export function exportWHTCertificatePDF(paymentNumber: string, certs: WHTCertifi
       theme: "grid",
     });
 
-    y = (doc as jsPDF & { lastAutoTable: { finalY: number } }).lastAutoTable.finalY + 4;
+    y = (doc as jsPDF & { lastAutoTable: { finalY: number } }).lastAutoTable.finalY + 6;
 
-    doc.setFontSize(8);
+    doc.setFontSize(9);
     doc.setFont("Sarabun", "bold");
     doc.text("รวมเงินภาษีที่หักนำส่ง (ตัวอักษร)", left, y);
     doc.setFont("Sarabun", "normal");
-    doc.text(numberToThaiBahtText(totalWHT), left + 48, y);
-    y += 4.5;
+    doc.text(numberToThaiBahtText(totalWHT), left + 52, y);
+    y += 5.5;
     doc.setLineWidth(0.3);
-    doc.line(left, y - 3, right, y - 3);
+    doc.line(left, y - 4, right, y - 4);
 
+    doc.setFontSize(8.5);
     const pensionLine = doc.splitTextToSize(
       "เงินที่จ่ายเข้า กบข./กสจ./กองทุนสงเคราะห์ครูโรงเรียนเอกชน.......................บาท กองทุนประกันสังคม.....................บาท กองทุนสำรองเลี้ยงชีพ......................บาท",
       width - 2
     );
     doc.text(pensionLine, left, y);
-    y += pensionLine.length * 3.8 + 1.5;
-    doc.line(left, y - 3.5, right, y - 3.5);
+    y += pensionLine.length * 4.5 + 2;
+    doc.line(left, y - 4, right, y - 4);
 
-    doc.setFontSize(8);
+    doc.setFontSize(9);
     doc.setFont("Sarabun", "bold");
     doc.text("ผู้จ่ายเงิน", left, y);
     doc.setFont("Sarabun", "normal");
-    doc.text("☑ (1) หัก ณ ที่จ่าย", left + 16, y);
-    doc.text("☐ (2) ออกให้ตลอดไป", left + 55, y);
-    doc.text("☐ (3) ออกให้ครั้งเดียว", left + 95, y);
-    doc.text("☐ (4) อื่น ๆ (ระบุ)................................", left + 135, y);
-    y += 4.5;
-    doc.line(left, y - 3, right, y - 3);
+    doc.text("☑ (1) หัก ณ ที่จ่าย", left + 18, y);
+    doc.text("☐ (2) ออกให้ตลอดไป", left + 58, y);
+    doc.text("☐ (3) ออกให้ครั้งเดียว", left + 100, y);
+    doc.text("☐ (4) อื่น ๆ (ระบุ)................................", left + 142, y);
+    y += 5.5;
+    doc.line(left, y - 4, right, y - 4);
+    y += 1.5;
 
-    // Warning (left) / certification + signature (right)
-    const colW = width / 2;
+    // Warning (left, narrower) / certification + signature (right, wider so the
+    // certification sentence fits on one line) — roughly matches the source form's proportions.
+    const warnColW = width * 0.36;
+    const certColW = width - warnColW;
     const warnLines = doc.splitTextToSize(
       "ผู้มีหน้าที่ออกหนังสือรับรองการหักภาษี ณ ที่จ่าย ฝ่าฝืนไม่ปฏิบัติตามมาตรา 50 ทวิ แห่งประมวลรัษฎากร ต้องรับโทษทางอาญาตามมาตรา 35 แห่งประมวลรัษฎากร",
-      colW - 4
+      warnColW - 5
     );
-    doc.setFontSize(7.5);
-    doc.setFont("Sarabun", "bold");
-    doc.text("คำเตือน", left, y + 3.5);
-    doc.setFont("Sarabun", "normal");
-    doc.text(warnLines, left, y + 7);
-    doc.line(left + colW, y - 3, left + colW, y + warnLines.length * 3.6 + 12);
+    const blockHeight = Math.max(warnLines.length * 4.2 + 12, 40);
 
-    const rightColX = left + colW + colW / 2;
-    doc.setFontSize(8);
-    doc.text("ขอรับรองว่าข้อความและตัวเลขดังกล่าวข้างต้นถูกต้องตรงกับความจริงทุกประการ", rightColX, y + 3.5, {
+    doc.setFontSize(8.5);
+    doc.setFont("Sarabun", "bold");
+    doc.text("คำเตือน", left, y + 5);
+    doc.setFont("Sarabun", "normal");
+    doc.text(warnLines, left, y + 10);
+    doc.line(left + warnColW, y - 2, left + warnColW, y + blockHeight - 3);
+
+    const rightColX = left + warnColW + certColW / 2;
+    doc.setFontSize(9);
+    doc.text("ขอรับรองว่าข้อความและตัวเลขดังกล่าวข้างต้นถูกต้องตรงกับความจริงทุกประการ", rightColX, y + 5, {
       align: "center",
-      maxWidth: colW - 6,
     });
-    doc.text("ลงชื่อ.................................................ผู้จ่ายเงิน", rightColX, y + 14, { align: "center" });
-    doc.text("......../.........../.......... (วัน เดือน ปี ที่ออกหนังสือรับรองฯ)", rightColX, y + 18, { align: "center" });
-    doc.setFontSize(6.5);
+    doc.text("ลงชื่อ.................................................ผู้จ่ายเงิน", rightColX, y + 21, { align: "center" });
+    doc.text("......../.........../.......... (วัน เดือน ปี ที่ออกหนังสือรับรองฯ)", rightColX, y + 27, { align: "center" });
+    doc.setFontSize(7.5);
     doc.setTextColor(120);
-    doc.text("ประทับตรานิติบุคคล (ถ้ามี)", rightColX, y + 21.5, { align: "center" });
+    doc.text("ประทับตรานิติบุคคล (ถ้ามี)", rightColX, y + 32, { align: "center" });
     doc.setTextColor(0);
 
-    y += Math.max(warnLines.length * 3.6 + 12, 25) + 2;
+    y += blockHeight;
     doc.line(left, y, right, y);
-    y += 3.5;
+    y += 4.5;
 
-    doc.setFontSize(6.5);
+    doc.setFontSize(7.5);
     doc.setTextColor(90);
     doc.text("หมายเหตุ เลขประจำตัวผู้เสียภาษีอากร (13 หลัก)* หมายถึง", left, y);
-    y += 3;
+    y += 3.8;
     doc.text("1. กรณีบุคคลธรรมดาไทย ให้ใช้เลขประจำตัวประชาชนของกรมการปกครอง", left, y);
-    y += 3;
+    y += 3.8;
     doc.text("2. กรณีนิติบุคคล ให้ใช้เลขทะเบียนนิติบุคคลของกรมพัฒนาธุรกิจการค้า", left, y);
-    y += 3;
+    y += 3.8;
     doc.text("3. กรณีอื่น ๆ นอกเหนือจาก 1. และ 2. ให้ใช้เลขประจำตัวผู้เสียภาษีอากร (13 หลัก) ของกรมสรรพากร", left, y);
     doc.setTextColor(0);
     y += 6;
