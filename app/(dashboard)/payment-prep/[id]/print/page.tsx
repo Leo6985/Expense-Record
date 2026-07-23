@@ -60,20 +60,13 @@ export default async function PaymentPrepPrintPage({
           </div>
         </div>
 
-        {prep.notes && (
-          <div className="text-sm text-gray-600 mb-5 border-l-4 border-gray-300 pl-3">
-            <span className="text-gray-400">หมายเหตุ: </span>{prep.notes}
-          </div>
-        )}
-
         {/* Items table */}
         <table className="w-full text-sm border-collapse mb-6">
           <thead>
             <tr className="bg-gray-800 text-white">
               <th className="border border-gray-700 px-3 py-2.5 text-left font-semibold text-xs uppercase tracking-wide">ผู้ขาย</th>
-              <th className="border border-gray-700 px-3 py-2.5 text-left font-semibold text-xs uppercase tracking-wide">เลขที่ใบแจ้งหนี้</th>
-              <th className="border border-gray-700 px-3 py-2.5 text-left font-semibold text-xs uppercase tracking-wide">ใบสั่งซื้อ (PO)</th>
-              <th className="border border-gray-700 px-3 py-2.5 text-left font-semibold text-xs uppercase tracking-wide">บัญชีปลายทาง</th>
+              <th className="border border-gray-700 px-3 py-2.5 text-left font-semibold text-xs uppercase tracking-wide w-32">เลขที่ใบแจ้งหนี้</th>
+              <th className="border border-gray-700 px-3 py-2.5 text-left font-semibold text-xs uppercase tracking-wide w-28">ใบสั่งซื้อ (PO)</th>
               <th className="border border-gray-700 px-3 py-2.5 text-right font-semibold text-xs uppercase tracking-wide w-26">จำนวนเงิน</th>
               <th className="border border-gray-700 px-3 py-2.5 text-right font-semibold text-xs uppercase tracking-wide w-26">หัก ณ ที่จ่าย</th>
               <th className="border border-gray-700 px-3 py-2.5 text-right font-semibold text-xs uppercase tracking-wide w-26">สุทธิ</th>
@@ -85,14 +78,6 @@ export default async function PaymentPrepPrintPage({
                 <td className="border border-gray-300 px-3 py-2 font-medium">{item.ap.vendor.name}</td>
                 <td className="border border-gray-300 px-3 py-2 font-mono text-xs">{item.ap.invoiceNumber}</td>
                 <td className="border border-gray-300 px-3 py-2 font-mono text-xs">{item.ap.po?.poNumber ?? "-"}</td>
-                <td className="border border-gray-300 px-3 py-2 text-xs text-gray-700">
-                  {item.ap.vendor.bankAccountNo ? (
-                    <div>
-                      <div className="font-medium">{item.ap.vendor.bankName ?? ""}</div>
-                      <div>{item.ap.vendor.bankAccountNo} {item.ap.vendor.bankAccountName ?? ""}</div>
-                    </div>
-                  ) : "-"}
-                </td>
                 <td className="border border-gray-300 px-3 py-2 text-right">{formatCurrency(item.amount)}</td>
                 <td className="border border-gray-300 px-3 py-2 text-right text-xs">
                   {item.withholdingTaxRate > 0
@@ -105,17 +90,42 @@ export default async function PaymentPrepPrintPage({
           </tbody>
           <tfoot>
             <tr className="bg-gray-50">
-              <td colSpan={4} className="border border-gray-300 px-3 py-2.5 text-right font-semibold text-gray-700">ยอดรวม</td>
+              <td colSpan={3} className="border border-gray-300 px-3 py-2.5 text-right font-semibold text-gray-700">ยอดรวม</td>
               <td className="border border-gray-300 px-3 py-2.5 text-right font-medium">{formatCurrency(prep.totalAmount)}</td>
               <td className="border border-gray-300 px-3 py-2.5 text-right font-medium text-red-700">{formatCurrency(prep.totalWithholdingTax)}</td>
               <td className="border border-gray-300 px-3 py-2.5 text-right font-medium">{formatCurrency(prep.netPayableAmount)}</td>
             </tr>
             <tr className="bg-gray-100">
-              <td colSpan={6} className="border border-gray-300 px-3 py-2.5 text-right font-bold text-gray-700">ยอดที่ต้องจ่ายสุทธิ</td>
+              <td colSpan={5} className="border border-gray-300 px-3 py-2.5 text-right font-bold text-gray-700">ยอดที่ต้องจ่ายสุทธิ</td>
               <td className="border border-gray-300 px-3 py-2.5 text-right font-bold text-blue-700 text-base">{formatCurrency(prep.netPayableAmount)}</td>
             </tr>
           </tfoot>
         </table>
+
+        {/* Destination bank accounts — listed vertically, one per vendor */}
+        <div className="mb-6">
+          <div className="font-semibold text-gray-800 mb-2 text-sm border-b border-gray-300 pb-1">บัญชีปลายทางสำหรับโอนเงิน</div>
+          <div className="space-y-1.5 text-sm">
+            {prep.items.map((item) => (
+              <div key={item.id} className="flex items-baseline justify-between gap-4 border-b border-dashed border-gray-200 pb-1.5">
+                <span className="text-gray-800 font-medium">{item.ap.vendor.name}</span>
+                <span className="text-gray-600 text-xs text-right">
+                  {item.ap.vendor.bankAccountNo
+                    ? `${item.ap.vendor.bankName ?? ""} ${item.ap.vendor.bankAccountNo} ${item.ap.vendor.bankAccountName ?? ""}`.trim()
+                    : "-"}
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* Notes — blank space for handwritten remarks */}
+        <div className="mb-6">
+          <div className="font-semibold text-gray-800 mb-2 text-sm">หมายเหตุ</div>
+          <div className="border border-gray-300 rounded-lg p-3 min-h-20 text-sm text-gray-600">
+            {prep.notes}
+          </div>
+        </div>
 
         {/* Payment info */}
         {prep.payment && (
