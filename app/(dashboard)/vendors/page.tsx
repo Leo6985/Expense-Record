@@ -29,13 +29,19 @@ export default async function VendorsPage({
 
       <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
         <div className="p-4 border-b border-gray-100">
-          <form>
+          <form className="flex gap-2">
             <input
               name="q"
               defaultValue={q}
-              placeholder="ค้นหาชื่อ, รหัสผู้ขาย, เลขผู้เสียภาษี..."
-              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              placeholder="ค้นหาชื่อ, รหัสผู้ขาย, เลขประจำตัวผู้เสียภาษี..."
+              className="flex-1 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
             />
+            <button
+              type="submit"
+              className="bg-blue-700 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-blue-800 transition-colors"
+            >
+              ค้นหา
+            </button>
           </form>
         </div>
 

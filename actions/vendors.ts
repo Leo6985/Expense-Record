@@ -79,7 +79,13 @@ export async function createVendor(data: {
   if (existing) throw new Error(`รหัสผู้ขาย ${data.code} มีในระบบแล้ว`);
 
   const vendor = await prisma.vendor.create({ data });
-  await syncVendorToSheet(vendor);
+  try {
+    await syncVendorToSheet(vendor);
+  } catch (err) {
+    // Postgres write already succeeded — don't fail vendor creation over a Sheet sync hiccup
+    // (mirrors the tolerance importVendorsCSV already has for the same failure class).
+    console.error("syncVendorToSheet failed after createVendor:", err);
+  }
 
   revalidatePath("/vendors");
   return vendor;
@@ -109,7 +115,11 @@ export async function updateVendor(
   }
 
   const vendor = await prisma.vendor.update({ where: { id }, data });
-  await syncVendorToSheet(vendor);
+  try {
+    await syncVendorToSheet(vendor);
+  } catch (err) {
+    console.error("syncVendorToSheet failed after updateVendor:", err);
+  }
 
   revalidatePath("/vendors");
   revalidatePath(`/vendors/${id}`);
