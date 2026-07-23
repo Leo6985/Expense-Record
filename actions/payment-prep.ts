@@ -74,7 +74,7 @@ export async function getPaymentPrep(id: string) {
       items: {
         include: {
           ap: {
-            include: { vendor: true },
+            include: { vendor: true, po: { select: { poNumber: true } } },
           },
         },
       },

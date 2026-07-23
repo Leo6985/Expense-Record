@@ -72,6 +72,7 @@ export default async function PaymentPrepPrintPage({
             <tr className="bg-gray-800 text-white">
               <th className="border border-gray-700 px-3 py-2.5 text-left font-semibold text-xs uppercase tracking-wide">ผู้ขาย</th>
               <th className="border border-gray-700 px-3 py-2.5 text-left font-semibold text-xs uppercase tracking-wide">เลขที่ใบแจ้งหนี้</th>
+              <th className="border border-gray-700 px-3 py-2.5 text-left font-semibold text-xs uppercase tracking-wide">ใบสั่งซื้อ (PO)</th>
               <th className="border border-gray-700 px-3 py-2.5 text-left font-semibold text-xs uppercase tracking-wide">บัญชีปลายทาง</th>
               <th className="border border-gray-700 px-3 py-2.5 text-right font-semibold text-xs uppercase tracking-wide w-26">จำนวนเงิน</th>
               <th className="border border-gray-700 px-3 py-2.5 text-right font-semibold text-xs uppercase tracking-wide w-26">หัก ณ ที่จ่าย</th>
@@ -83,6 +84,7 @@ export default async function PaymentPrepPrintPage({
               <tr key={item.id} className={idx % 2 === 1 ? "bg-gray-50" : "bg-white"}>
                 <td className="border border-gray-300 px-3 py-2 font-medium">{item.ap.vendor.name}</td>
                 <td className="border border-gray-300 px-3 py-2 font-mono text-xs">{item.ap.invoiceNumber}</td>
+                <td className="border border-gray-300 px-3 py-2 font-mono text-xs">{item.ap.po?.poNumber ?? "-"}</td>
                 <td className="border border-gray-300 px-3 py-2 text-xs text-gray-700">
                   {item.ap.vendor.bankAccountNo ? (
                     <div>
@@ -103,13 +105,13 @@ export default async function PaymentPrepPrintPage({
           </tbody>
           <tfoot>
             <tr className="bg-gray-50">
-              <td colSpan={3} className="border border-gray-300 px-3 py-2.5 text-right font-semibold text-gray-700">ยอดรวม</td>
+              <td colSpan={4} className="border border-gray-300 px-3 py-2.5 text-right font-semibold text-gray-700">ยอดรวม</td>
               <td className="border border-gray-300 px-3 py-2.5 text-right font-medium">{formatCurrency(prep.totalAmount)}</td>
               <td className="border border-gray-300 px-3 py-2.5 text-right font-medium text-red-700">{formatCurrency(prep.totalWithholdingTax)}</td>
               <td className="border border-gray-300 px-3 py-2.5 text-right font-medium">{formatCurrency(prep.netPayableAmount)}</td>
             </tr>
             <tr className="bg-gray-100">
-              <td colSpan={5} className="border border-gray-300 px-3 py-2.5 text-right font-bold text-gray-700">ยอดที่ต้องจ่ายสุทธิ</td>
+              <td colSpan={6} className="border border-gray-300 px-3 py-2.5 text-right font-bold text-gray-700">ยอดที่ต้องจ่ายสุทธิ</td>
               <td className="border border-gray-300 px-3 py-2.5 text-right font-bold text-blue-700 text-base">{formatCurrency(prep.netPayableAmount)}</td>
             </tr>
           </tfoot>

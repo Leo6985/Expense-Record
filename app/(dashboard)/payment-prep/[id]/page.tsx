@@ -223,6 +223,8 @@ export default function PaymentPrepDetailPage() {
             <tr className="border-b border-gray-200 bg-gray-50">
               <th className="text-left py-2 px-2 font-medium text-gray-600">เลข AP</th>
               <th className="text-left py-2 px-2 font-medium text-gray-600">ผู้ขาย</th>
+              <th className="text-left py-2 px-2 font-medium text-gray-600">เลขที่ใบแจ้งหนี้</th>
+              <th className="text-left py-2 px-2 font-medium text-gray-600">ใบสั่งซื้อ (PO)</th>
               <th className="text-left py-2 px-2 font-medium text-gray-600">บัญชีปลายทาง</th>
               <th className="text-right py-2 px-2 font-medium text-gray-600">จำนวนเงิน</th>
               <th className="text-right py-2 px-2 font-medium text-gray-600">หัก ณ ที่จ่าย</th>
@@ -233,10 +235,9 @@ export default function PaymentPrepDetailPage() {
             {prep.items.map((item) => (
               <tr key={item.id} className="border-b border-gray-100">
                 <td className="py-2 px-2 font-mono text-blue-700 text-xs">{item.ap.apNumber}</td>
-                <td className="py-2 px-2">
-                  <div>{item.ap.vendor.name}</div>
-                  <div className="text-xs text-gray-500">{item.ap.invoiceNumber}</div>
-                </td>
+                <td className="py-2 px-2">{item.ap.vendor.name}</td>
+                <td className="py-2 px-2 font-mono text-xs text-gray-600">{item.ap.invoiceNumber}</td>
+                <td className="py-2 px-2 font-mono text-xs text-gray-600">{item.ap.po?.poNumber ?? "-"}</td>
                 <td className="py-2 px-2 text-gray-600 text-xs">
                   {item.ap.vendor.bankAccountNo ? `${item.ap.vendor.bankAccountNo} ${item.ap.vendor.bankAccountName ?? ""}` : "-"}
                 </td>
@@ -252,7 +253,7 @@ export default function PaymentPrepDetailPage() {
           </tbody>
           <tfoot>
             <tr className="border-t border-gray-200">
-              <td colSpan={3} className="pt-2 text-right text-gray-600 text-sm">ยอดรวม</td>
+              <td colSpan={5} className="pt-2 text-right text-gray-600 text-sm">ยอดรวม</td>
               <td className="pt-2 text-right font-medium">฿{formatCurrency(prep.totalAmount)}</td>
               <td className="pt-2 text-right text-red-600 font-medium">฿{formatCurrency(prep.totalWithholdingTax)}</td>
               <td className="pt-2 text-right font-bold text-blue-700">฿{formatCurrency(prep.netPayableAmount)}</td>

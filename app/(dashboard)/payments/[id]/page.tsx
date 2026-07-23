@@ -17,10 +17,10 @@ export default async function PaymentDetailPage({
   return (
     <div className="max-w-3xl">
       <div className="flex items-center gap-3 mb-6">
-        <Link href="/payments" className="text-gray-400 hover:text-gray-600">← กลับ</Link>
+        <Link href="/payments" className="text-gray-400 hover:text-gray-600 print:hidden">← กลับ</Link>
         <h1 className="text-2xl font-bold text-gray-900">{payment.paymentNumber}</h1>
         <span className="inline-flex px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-700">ชำระแล้ว</span>
-        <div className="ml-auto flex gap-2">
+        <div className="ml-auto flex gap-2 print:hidden">
           <DeleteBtn paymentId={payment.id} prepId={payment.prepId} />
           <PrintBtn />
         </div>

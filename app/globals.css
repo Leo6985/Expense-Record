@@ -15,3 +15,15 @@ body {
     @apply inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium;
   }
 }
+
+/* Every printed page hides the dashboard sidebar, regardless of which page calls
+   window.print() — the two dedicated /print routes also set this inline, this is
+   the fallback for print buttons on regular pages (e.g. payments/[id]). */
+@media print {
+  aside {
+    display: none !important;
+  }
+  main {
+    margin-left: 0 !important;
+  }
+}
