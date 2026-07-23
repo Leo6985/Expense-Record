@@ -102,18 +102,17 @@ export default async function PaymentPrepPrintPage({
           </tfoot>
         </table>
 
-        {/* Destination bank accounts — listed vertically, one per vendor */}
+        {/* Destination bank accounts — listed vertically, in table row order */}
         <div className="mb-6">
           <div className="font-semibold text-gray-800 mb-2 text-sm border-b border-gray-300 pb-1">บัญชีปลายทางสำหรับโอนเงิน</div>
           <div className="space-y-1.5 text-sm">
-            {prep.items.map((item) => (
+            {prep.items.map((item, idx) => (
               <div key={item.id} className="flex items-baseline justify-between gap-4 border-b border-dashed border-gray-200 pb-1.5">
-                <span className="text-gray-800 font-medium">{item.ap.vendor.name}</span>
-                <span className="text-gray-600 text-xs text-right">
-                  {item.ap.vendor.bankAccountNo
-                    ? `${item.ap.vendor.bankName ?? ""} ${item.ap.vendor.bankAccountNo} ${item.ap.vendor.bankAccountName ?? ""}`.trim()
-                    : "-"}
+                <span className="text-gray-800">
+                  <span className="text-gray-400 mr-1">{idx + 1}.</span>
+                  {item.ap.vendor.bankAccountName ?? "-"}
                 </span>
+                <span className="text-gray-600 font-mono text-xs">{item.ap.vendor.bankAccountNo ?? "-"}</span>
               </div>
             ))}
           </div>
