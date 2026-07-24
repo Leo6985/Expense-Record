@@ -234,6 +234,13 @@ export type WHTCertificateData = {
 export function exportWHTCertificatePDF(paymentNumber: string, certs: WHTCertificateData[]) {
   const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
   registerThaiFont(doc);
+  // Thai vowels/tone marks sit above and below the baseline; jsPDF's default 1.15
+  // line-height factor packs wrapped lines too tightly, clipping or overlapping marks
+  // between lines. autoTable and doc.text() both read this factor for their internal
+  // line spacing, so bumping it here fixes both free text and table cells.
+  doc.setLineHeightFactor(1.5);
+  const lineHeightMM = (fontSizePt: number) =>
+    (fontSizePt / doc.internal.scaleFactor) * doc.getLineHeightFactor();
 
   const left = 12;
   const right = 198;
@@ -290,7 +297,7 @@ export function exportWHTCertificatePDF(paymentNumber: string, certs: WHTCertifi
       doc.setFontSize(9.5);
       const addrLines = doc.splitTextToSize(`ที่อยู่ ${address}`, width - 4);
       doc.text(addrLines, left, y);
-      y += addrLines.length * 4.2;
+      y += addrLines.length * lineHeightMM(9.5);
       doc.setFontSize(7);
       doc.setTextColor(120);
       doc.text(
@@ -366,9 +373,12 @@ export function exportWHTCertificatePDF(paymentNumber: string, certs: WHTCertifi
       styles: { font: "Sarabun", fontSize: 8.5, cellPadding: 1.8, minCellHeight: 7, lineColor: 0, lineWidth: 0.2, valign: "top" },
       headStyles: { fillColor: [255, 255, 255], textColor: 0, fontStyle: "normal", halign: "center", valign: "bottom", minCellHeight: 9 },
       columnStyles: {
-        0: { cellWidth: width - 3 * 22 },
+        // Column 2's header ("จำนวนเงินที่จ่าย") needs ~19.5mm at 8.5pt to stay on one
+        // line once cell padding is subtracted from 22mm; widen it and take the
+        // difference from column 0, which has plenty of room to spare.
+        0: { cellWidth: width - 22 - 26 - 22 },
         1: { cellWidth: 22, halign: "center" },
-        2: { cellWidth: 22, halign: "right" },
+        2: { cellWidth: 26, halign: "right" },
         3: { cellWidth: 22, halign: "right" },
       },
       theme: "grid",
@@ -391,7 +401,7 @@ export function exportWHTCertificatePDF(paymentNumber: string, certs: WHTCertifi
       width - 2
     );
     doc.text(pensionLine, left, y);
-    y += pensionLine.length * 4.5 + 2;
+    y += pensionLine.length * lineHeightMM(8.5) + 2;
     doc.line(left, y - 4, right, y - 4);
 
     doc.setFontSize(9);
@@ -414,7 +424,7 @@ export function exportWHTCertificatePDF(paymentNumber: string, certs: WHTCertifi
       "ผู้มีหน้าที่ออกหนังสือรับรองการหักภาษี ณ ที่จ่าย ฝ่าฝืนไม่ปฏิบัติตามมาตรา 50 ทวิ แห่งประมวลรัษฎากร ต้องรับโทษทางอาญาตามมาตรา 35 แห่งประมวลรัษฎากร",
       warnColW - 5
     );
-    const blockHeight = Math.max(warnLines.length * 4.2 + 12, 40);
+    const blockHeight = Math.max(warnLines.length * lineHeightMM(8.5) + 12, 40);
 
     doc.setFontSize(8.5);
     doc.setFont("Sarabun", "bold");

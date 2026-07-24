@@ -38,12 +38,18 @@ export default async function WHTCertificatePage({
       address: cert.vendor.address,
       taxId: cert.vendor.taxId,
     },
-    items: cert.items.map((item) => ({
-      invoiceNumber: item.ap.invoiceNumber,
-      amount: item.amount,
-      withholdingTaxRate: item.withholdingTaxRate,
-      withholdingTaxAmount: item.withholdingTaxAmount,
-    })),
+    items: cert.items.map((item) => {
+      // WHT is withheld on the pre-VAT portion only; the "จำนวนเงินที่จ่าย" column on the
+      // official form must show that base, not the VAT-inclusive amount actually paid.
+      const vatRatio = item.ap.totalAmount > 0 ? item.ap.amount / item.ap.totalAmount : 1;
+      const preVatAmount = Math.round(item.amount * vatRatio * 100) / 100;
+      return {
+        invoiceNumber: item.ap.invoiceNumber,
+        amount: preVatAmount,
+        withholdingTaxRate: item.withholdingTaxRate,
+        withholdingTaxAmount: item.withholdingTaxAmount,
+      };
+    }),
   }));
 
   return <DownloadCertificate paymentNumber={payment.paymentNumber} certs={certs} />;
