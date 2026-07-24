@@ -40,7 +40,7 @@ export default function NewGoodsReceiptPage() {
   const [notes, setNotes] = useState("");
   const [invoiceNumber, setInvoiceNumber] = useState("");
   const [invoiceDate, setInvoiceDate] = useState(today);
-  const [vatAmount, setVatAmount] = useState("");
+  const [vatRate, setVatRate] = useState("7");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
@@ -83,6 +83,7 @@ export default function NewGoodsReceiptPage() {
         .filter((l) => l.qty > 0)
     : [];
   const receiveAmount = receiveLines.reduce((sum, l) => sum + l.qty * l.item.unitPrice, 0);
+  const vatAmount = receiveAmount * ((parseFloat(vatRate) || 0) / 100);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -114,7 +115,7 @@ export default function NewGoodsReceiptPage() {
         notes: notes || undefined,
         invoiceNumber: invoiceNumber.trim(),
         invoiceDate,
-        vatAmount: vatAmount ? parseFloat(vatAmount) : undefined,
+        vatAmount: vatAmount || undefined,
         items: receiveLines.map((l) => ({ poItemId: l.item.id, quantity: l.qty })),
       });
       router.push(`/goods-receipts/${gr.id}`);
@@ -311,16 +312,15 @@ export default function NewGoodsReceiptPage() {
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">ภาษีมูลค่าเพิ่ม (VAT)</label>
-                <input
-                  type="number"
-                  min="0"
-                  step="0.01"
-                  value={vatAmount}
-                  onChange={(e) => setVatAmount(e.target.value)}
-                  placeholder="0.00"
+                <label className="block text-sm font-medium text-gray-700 mb-1">อัตราภาษีมูลค่าเพิ่ม (VAT)</label>
+                <select
+                  value={vatRate}
+                  onChange={(e) => setVatRate(e.target.value)}
                   className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-orange-500"
-                />
+                >
+                  <option value="0">0% (ไม่มี VAT)</option>
+                  <option value="7">7% (มาตรฐาน)</option>
+                </select>
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">วันครบกำหนดชำระ</label>
@@ -337,11 +337,11 @@ export default function NewGoodsReceiptPage() {
               <span className="text-gray-600">ยอดหนี้ที่จะตั้ง (เฉพาะรายการที่รับครั้งนี้)</span>
               <div className="text-right">
                 <div className="text-gray-500">มูลค่า: ฿{formatCurrency(receiveAmount)}</div>
-                {vatAmount && parseFloat(vatAmount) > 0 && (
-                  <div className="text-gray-500">VAT: ฿{formatCurrency(parseFloat(vatAmount))}</div>
+                {vatAmount > 0 && (
+                  <div className="text-gray-500">VAT {vatRate}%: ฿{formatCurrency(vatAmount)}</div>
                 )}
                 <div className="font-bold text-orange-700 text-base">
-                  รวม: ฿{formatCurrency(receiveAmount + (vatAmount ? parseFloat(vatAmount) : 0))}
+                  รวม: ฿{formatCurrency(receiveAmount + vatAmount)}
                 </div>
               </div>
             </div>
