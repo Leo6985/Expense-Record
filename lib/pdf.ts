@@ -1,6 +1,7 @@
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 import { registerThaiFont } from "./fonts/register";
+import { patchThaiMarkStacking } from "./fonts/thai-shape";
 import { numberToThaiBahtText } from "./utils";
 
 function addThaiFont(doc: jsPDF) {
@@ -239,6 +240,10 @@ export function exportWHTCertificatePDF(paymentNumber: string, certs: WHTCertifi
   // between lines. autoTable and doc.text() both read this factor for their internal
   // line spacing, so bumping it here fixes both free text and table cells.
   doc.setLineHeightFactor(1.5);
+  // Separately: jsPDF can't stack a tone mark above an upper vowel on the SAME
+  // character (e.g. "ที่") since it has no text-shaping engine — this patches
+  // doc.text() to lift those marks manually. See lib/fonts/thai-shape.ts.
+  patchThaiMarkStacking(doc);
   const lineHeightMM = (fontSizePt: number) =>
     (fontSizePt / doc.internal.scaleFactor) * doc.getLineHeightFactor();
 
@@ -325,7 +330,7 @@ export function exportWHTCertificatePDF(paymentNumber: string, certs: WHTCertifi
     y += 4.5;
     let cx = left;
     PND_OPTIONS.forEach((label, i) => {
-      const s = `☐ (${i + 1}) ${label}`;
+      const s = `[ ] (${i + 1}) ${label}`;
       const w = doc.getTextWidth(s) + 5;
       if (cx + w > right) {
         cx = left;
@@ -408,10 +413,12 @@ export function exportWHTCertificatePDF(paymentNumber: string, certs: WHTCertifi
     doc.setFont("Sarabun", "bold");
     doc.text("ผู้จ่ายเงิน", left, y);
     doc.setFont("Sarabun", "normal");
-    doc.text("☑ (1) หัก ณ ที่จ่าย", left + 18, y);
-    doc.text("☐ (2) ออกให้ตลอดไป", left + 58, y);
-    doc.text("☐ (3) ออกให้ครั้งเดียว", left + 100, y);
-    doc.text("☐ (4) อื่น ๆ (ระบุ)................................", left + 142, y);
+    // ☑/☐ aren't in the embedded Sarabun font (they'd silently draw as .notdef), so
+    // plain brackets are used instead — see the same substitution above for PND_OPTIONS.
+    doc.text("[x] (1) หัก ณ ที่จ่าย", left + 18, y);
+    doc.text("[ ] (2) ออกให้ตลอดไป", left + 58, y);
+    doc.text("[ ] (3) ออกให้ครั้งเดียว", left + 100, y);
+    doc.text("[ ] (4) อื่น ๆ (ระบุ)................................", left + 142, y);
     y += 5.5;
     doc.line(left, y - 4, right, y - 4);
     y += 1.5;
@@ -424,7 +431,7 @@ export function exportWHTCertificatePDF(paymentNumber: string, certs: WHTCertifi
       "ผู้มีหน้าที่ออกหนังสือรับรองการหักภาษี ณ ที่จ่าย ฝ่าฝืนไม่ปฏิบัติตามมาตรา 50 ทวิ แห่งประมวลรัษฎากร ต้องรับโทษทางอาญาตามมาตรา 35 แห่งประมวลรัษฎากร",
       warnColW - 5
     );
-    const blockHeight = Math.max(warnLines.length * lineHeightMM(8.5) + 12, 40);
+    const blockHeight = Math.max(warnLines.length * lineHeightMM(8.5) + 12, 44);
 
     doc.setFontSize(8.5);
     doc.setFont("Sarabun", "bold");
@@ -439,10 +446,11 @@ export function exportWHTCertificatePDF(paymentNumber: string, certs: WHTCertifi
       align: "center",
     });
     doc.text("ลงชื่อ.................................................ผู้จ่ายเงิน", rightColX, y + 21, { align: "center" });
-    doc.text("......../.........../.......... (วัน เดือน ปี ที่ออกหนังสือรับรองฯ)", rightColX, y + 27, { align: "center" });
+    doc.text("......../.........../..........", rightColX, y + 27, { align: "center" });
+    doc.text("(วัน เดือน ปี ที่ออกหนังสือรับรองฯ)", rightColX, y + 31, { align: "center" });
     doc.setFontSize(7.5);
     doc.setTextColor(120);
-    doc.text("ประทับตรานิติบุคคล (ถ้ามี)", rightColX, y + 32, { align: "center" });
+    doc.text("ประทับตรานิติบุคคล (ถ้ามี)", rightColX, y + 36, { align: "center" });
     doc.setTextColor(0);
 
     y += blockHeight;
