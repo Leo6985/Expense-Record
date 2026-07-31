@@ -130,18 +130,33 @@ export async function getApprovedPOsForGR() {
   }));
 }
 
+// Sequences by the highest existing number for this month's prefix, not by row count —
+// count() collides with an existing number as soon as any row in the middle of the
+// sequence has been deleted (e.g. GR...031 deleted leaves count() one short forever,
+// so count()+1 eventually re-lands on a still-existing GR...034 and the create fails
+// with a unique-constraint error).
 export async function getNextGRNumber() {
-  const count = await prisma.goodsReceipt.count();
   const year = String(new Date().getFullYear() + 543).slice(-2);
   const month = String(new Date().getMonth() + 1).padStart(2, "0");
-  return `GR${year}${month}${String(count + 1).padStart(4, "0")}`;
+  const prefix = `GR${year}${month}`;
+  const last = await prisma.goodsReceipt.findFirst({
+    where: { grNumber: { startsWith: prefix } },
+    orderBy: { grNumber: "desc" },
+  });
+  const lastSeq = last ? parseInt(last.grNumber.slice(prefix.length)) : 0;
+  return `${prefix}${String(lastSeq + 1).padStart(4, "0")}`;
 }
 
 async function getNextAPNumber(tx: Prisma.TransactionClient) {
-  const count = await tx.accountsPayable.count();
   const year = String(new Date().getFullYear() + 543).slice(-2);
   const month = String(new Date().getMonth() + 1).padStart(2, "0");
-  return `AP${year}${month}${String(count + 1).padStart(4, "0")}`;
+  const prefix = `AP${year}${month}`;
+  const last = await tx.accountsPayable.findFirst({
+    where: { apNumber: { startsWith: prefix } },
+    orderBy: { apNumber: "desc" },
+  });
+  const lastSeq = last ? parseInt(last.apNumber.slice(prefix.length)) : 0;
+  return `${prefix}${String(lastSeq + 1).padStart(4, "0")}`;
 }
 
 async function recomputePOStatus(tx: Prisma.TransactionClient, poId: string) {

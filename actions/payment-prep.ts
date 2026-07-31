@@ -85,11 +85,19 @@ export async function getPaymentPrep(id: string) {
   });
 }
 
+// Sequences by the highest existing number for this month's prefix, not by row count —
+// count() collides with an existing number once any row in the middle of the sequence
+// has been deleted, causing the create to fail with a unique-constraint error.
 export async function getNextPrepNumber() {
-  const count = await prisma.paymentPrep.count();
   const year = String(new Date().getFullYear() + 543).slice(-2);
   const month = String(new Date().getMonth() + 1).padStart(2, "0");
-  return `PP${year}${month}${String(count + 1).padStart(4, "0")}`;
+  const prefix = `PP${year}${month}`;
+  const last = await prisma.paymentPrep.findFirst({
+    where: { prepNumber: { startsWith: prefix } },
+    orderBy: { prepNumber: "desc" },
+  });
+  const lastSeq = last ? parseInt(last.prepNumber.slice(prefix.length)) : 0;
+  return `${prefix}${String(lastSeq + 1).padStart(4, "0")}`;
 }
 
 type PrepItemInput = { apId: string; amount: number; whtRate: number };
