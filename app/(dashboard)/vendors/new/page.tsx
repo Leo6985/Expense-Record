@@ -60,7 +60,7 @@ export default function NewVendorPage() {
           <div className="grid grid-cols-2 gap-4">
             <Field key={nextCode} label="รหัสผู้ขาย *" name="code" required placeholder="V00001" defaultValue={nextCode} />
             <Field label="ชื่อผู้ขาย *" name="name" required placeholder="บริษัท ตัวอย่าง จำกัด" />
-            <Field label="เลขผู้เสียภาษี" name="taxId" placeholder="0000000000000" />
+            <Field label="เลขประจำตัวผู้เสียภาษี" name="taxId" placeholder="0000000000000" />
             <Field label="เครดิต (วัน)" name="creditDays" type="number" defaultValue="30" />
           </div>
           <Field label="ที่อยู่" name="address" placeholder="เลขที่ ถนน แขวง/ตำบล เขต/อำเภอ จังหวัด รหัสไปรษณีย์" />

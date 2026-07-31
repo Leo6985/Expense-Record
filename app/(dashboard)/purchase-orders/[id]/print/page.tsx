@@ -65,7 +65,7 @@ export default async function POPrintPage({
               <div className="text-gray-600 text-xs mt-1 leading-relaxed">{po.vendor.address}</div>
             )}
             {po.vendor.taxId && (
-              <div className="text-gray-500 text-xs mt-1">เลขผู้เสียภาษี: <span className="font-mono">{po.vendor.taxId}</span></div>
+              <div className="text-gray-500 text-xs mt-1">เลขประจำตัวผู้เสียภาษี: <span className="font-mono">{po.vendor.taxId}</span></div>
             )}
             {po.vendor.phone && (
               <div className="text-gray-500 text-xs mt-0.5">โทร: {po.vendor.phone}</div>

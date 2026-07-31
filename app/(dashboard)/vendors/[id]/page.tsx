@@ -84,7 +84,7 @@ export default function VendorDetailPage() {
           <div className="grid grid-cols-2 gap-4">
             <Field label="รหัสผู้ขาย *" name="code" required defaultValue={vendor.code} />
             <Field label="ชื่อผู้ขาย *" name="name" required defaultValue={vendor.name} />
-            <Field label="เลขผู้เสียภาษี" name="taxId" defaultValue={vendor.taxId ?? ""} />
+            <Field label="เลขประจำตัวผู้เสียภาษี" name="taxId" defaultValue={vendor.taxId ?? ""} />
             <Field label="เครดิต (วัน)" name="creditDays" type="number" defaultValue={String(vendor.creditDays)} />
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">สถานะ</label>
