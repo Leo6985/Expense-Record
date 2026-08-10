@@ -3,8 +3,8 @@ import "./globals.css";
 import Providers from "./providers";
 
 export const metadata: Metadata = {
-  title: "ระบบบันทึกค่าใช้จ่าย",
-  description: "ระบบจัดการค่าใช้จ่ายบริษัท",
+  title: "โปรแกรมจัดการงานบัญชี",
+  description: "Accounting Management System",
 };
 
 export default function RootLayout({

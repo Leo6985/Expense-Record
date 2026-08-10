@@ -10,17 +10,11 @@ type MenuGroup = { label: string; items: MenuItem[]; roles: string[] };
 
 const menuGroups: MenuGroup[] = [
   {
-    label: "แผนกจัดซื้อ",
+    label: "ค่าใช้จ่าย",
     roles: ["PURCHASING", "ACCOUNTING", "OWNER"],
     items: [
       { href: "/purchase-orders", label: "ใบสั่งซื้อ (PO)", icon: "📋" },
       { href: "/goods-receipts", label: "รับสินค้า (GR)", icon: "📦" },
-    ],
-  },
-  {
-    label: "บัญชีและการเงิน",
-    roles: ["ACCOUNTING", "OWNER"],
-    items: [
       { href: "/accounts-payable", label: "ตั้งหนี้ (AP)", icon: "📄" },
       { href: "/payment-prep", label: "ใบเตรียมจ่าย", icon: "📑" },
       { href: "/payments", label: "บันทึกชำระเงิน", icon: "💳" },
@@ -90,8 +84,8 @@ export default function Sidebar({ role, userName }: { role: string; userName: st
         <Link href="/" className="flex items-center gap-2">
           <div className="w-8 h-8 bg-blue-400 rounded-lg flex items-center justify-center text-sm">💼</div>
           <div>
-            <div className="font-bold text-sm leading-tight">ระบบบันทึกค่าใช้จ่าย</div>
-            <div className="text-blue-300 text-xs">Expense Record</div>
+            <div className="font-bold text-sm leading-tight">โปรแกรมจัดการงานบัญชี</div>
+            <div className="text-blue-300 text-xs">Accounting Management System</div>
           </div>
         </Link>
       </div>
@@ -125,9 +119,12 @@ export default function Sidebar({ role, userName }: { role: string; userName: st
               {group.label}
             </div>
             {group.items.map((item) => {
-              // Hide from PURCHASING
+              // Hide from PURCHASING — these routes stay accounting/owner-only in proxy.ts
               if (item.href === "/company-accounts" && role === "PURCHASING") return null;
               if (item.href === "/chart-of-accounts" && role === "PURCHASING") return null;
+              if (item.href === "/accounts-payable" && role === "PURCHASING") return null;
+              if (item.href === "/payment-prep" && role === "PURCHASING") return null;
+              if (item.href === "/payments" && role === "PURCHASING") return null;
               const isActive = pathname.startsWith(item.href);
               return (
                 <Link

@@ -40,7 +40,7 @@ export default function LoginPage() {
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 11h.01M12 11h.01M15 11h.01M4 19h16a2 2 0 002-2V7a2 2 0 00-2-2H4a2 2 0 00-2 2v10a2 2 0 002 2z" />
             </svg>
           </div>
-          <h1 className="text-2xl font-bold text-gray-900">ระบบบันทึกค่าใช้จ่าย</h1>
+          <h1 className="text-2xl font-bold text-gray-900">โปรแกรมจัดการงานบัญชี</h1>
           <p className="text-gray-500 mt-1 text-sm">กรุณาเข้าสู่ระบบเพื่อดำเนินการต่อ</p>
         </div>
 
