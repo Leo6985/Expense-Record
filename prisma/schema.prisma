@@ -44,15 +44,15 @@ model Vendor {
 }
 
 model ChartOfAccount {
-  id        String    @id @default(cuid())
-  code      String    @unique
+  id        String   @id @default(cuid())
+  code      String   @unique
   name      String
-  type      String    @default("EXPENSE")
-  isActive  Boolean   @default(true)
-  createdAt DateTime  @default(now())
-  updatedAt DateTime  @updatedAt
+  type      String   @default("EXPENSE")
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
-  products  Product[]
+  products Product[]
 }
 
 model Product {
@@ -67,34 +67,101 @@ model Product {
   createdAt   DateTime        @default(now())
   updatedAt   DateTime        @updatedAt
 
-  poItems     POItem[]
+  poItems POItem[]
 }
 
 model CompanyBankAccount {
-  id          String    @id @default(cuid())
+  id          String   @id @default(cuid())
   bankName    String
   branch      String?
   accountNo   String
   accountName String
-  isActive    Boolean   @default(true)
-  createdAt   DateTime  @default(now())
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
 
-  payments    Payment[]
+  payments Payment[]
+  receipts Receipt[]
+}
+
+model Customer {
+  id            String   @id @default(cuid())
+  code          String   @unique
+  name          String
+  taxId         String?
+  address       String?
+  contactPerson String?
+  phone         String?
+  email         String?
+  isActive      Boolean  @default(true)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  salesInvoices SalesInvoice[]
+}
+
+model SalesInvoice {
+  id            String   @id @default(cuid())
+  invoiceNumber String   @unique
+  invoiceDate   DateTime
+  customerId    String
+  customer      Customer @relation(fields: [customerId], references: [id])
+  amount        Float
+  vatAmount     Float    @default(0)
+  totalAmount   Float
+  status        String   @default("PENDING")
+  notes         String?
+  createdByName String?
+  createdById   String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  receiptItems ReceiptItem[]
+}
+
+model Receipt {
+  id                   String             @id @default(cuid())
+  receiptNumber        String             @unique
+  receiptDate          DateTime           @default(now())
+  companyBankAccountId String
+  companyBankAccount   CompanyBankAccount @relation(fields: [companyBankAccountId], references: [id])
+  paymentMethod        String
+  referenceNumber      String?
+  totalAmount          Float
+  status               String             @default("DRAFT")
+  notes                String?
+  createdByName        String?
+  createdById          String?
+  approvedByName       String?
+  approvedById         String?
+  approvedAt           DateTime?
+  createdAt            DateTime           @default(now())
+  updatedAt            DateTime           @updatedAt
+
+  items ReceiptItem[]
+}
+
+model ReceiptItem {
+  id        String       @id @default(cuid())
+  receiptId String
+  receipt   Receipt      @relation(fields: [receiptId], references: [id], onDelete: Cascade)
+  invoiceId String
+  invoice   SalesInvoice @relation(fields: [invoiceId], references: [id])
+  amount    Float
 }
 
 model PurchaseOrder {
-  id            String    @id @default(cuid())
-  poNumber      String    @unique
-  prNumber      String?
-  vendorId      String
-  vendor        Vendor    @relation(fields: [vendorId], references: [id])
-  orderDate     DateTime  @default(now())
-  expectedDate  DateTime?
-  status        String    @default("DRAFT")
-  totalAmount   Float     @default(0)
-  vatRate       Float     @default(7)
-  vatAmount     Float     @default(0)
-  notes         String?
+  id             String    @id @default(cuid())
+  poNumber       String    @unique
+  prNumber       String?
+  vendorId       String
+  vendor         Vendor    @relation(fields: [vendorId], references: [id])
+  orderDate      DateTime  @default(now())
+  expectedDate   DateTime?
+  status         String    @default("DRAFT")
+  totalAmount    Float     @default(0)
+  vatRate        Float     @default(7)
+  vatAmount      Float     @default(0)
+  notes          String?
   createdByName  String?
   createdById    String?
   approvedByName String?
@@ -151,21 +218,21 @@ model GoodsReceiptItem {
 }
 
 model AccountsPayable {
-  id            String         @id @default(cuid())
-  apNumber      String         @unique
-  vendorId      String
-  vendor        Vendor         @relation(fields: [vendorId], references: [id])
-  poId          String?
-  po            PurchaseOrder? @relation(fields: [poId], references: [id])
-  grId          String?
-  gr            GoodsReceipt?  @relation(fields: [grId], references: [id])
-  invoiceNumber String
-  invoiceDate   DateTime
-  dueDate       DateTime
-  amount        Float
-  vatAmount     Float          @default(0)
-  totalAmount   Float
-  status        String         @default("PENDING")
+  id             String         @id @default(cuid())
+  apNumber       String         @unique
+  vendorId       String
+  vendor         Vendor         @relation(fields: [vendorId], references: [id])
+  poId           String?
+  po             PurchaseOrder? @relation(fields: [poId], references: [id])
+  grId           String?
+  gr             GoodsReceipt?  @relation(fields: [grId], references: [id])
+  invoiceNumber  String
+  invoiceDate    DateTime
+  dueDate        DateTime
+  amount         Float
+  vatAmount      Float          @default(0)
+  totalAmount    Float
+  status         String         @default("PENDING")
   notes          String?
   createdByName  String?
   createdById    String?
@@ -178,37 +245,37 @@ model AccountsPayable {
 }
 
 model PaymentPrep {
-  id            String    @id @default(cuid())
-  prepNumber    String    @unique
-  prepDate      DateTime  @default(now())
-  paymentDate   DateTime
+  id                  String    @id @default(cuid())
+  prepNumber          String    @unique
+  prepDate            DateTime  @default(now())
+  paymentDate         DateTime
   totalAmount         Float
   totalWithholdingTax Float     @default(0)
   netPayableAmount    Float     @default(0)
-  status        String    @default("DRAFT")
-  notes          String?
-  createdByName  String?
-  createdById    String?
-  approvedByName String?
-  approvedById   String?
-  approvedAt     DateTime?
-  createdAt      DateTime  @default(now())
-  updatedAt      DateTime  @updatedAt
+  status              String    @default("DRAFT")
+  notes               String?
+  createdByName       String?
+  createdById         String?
+  approvedByName      String?
+  approvedById        String?
+  approvedAt          DateTime?
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
 
   items   PaymentPrepItem[]
   payment Payment?
 }
 
 model PaymentPrepItem {
-  id                  String          @id @default(cuid())
-  prepId              String
-  prep                PaymentPrep     @relation(fields: [prepId], references: [id], onDelete: Cascade)
-  apId                String
-  ap                  AccountsPayable @relation(fields: [apId], references: [id])
-  amount              Float
-  withholdingTaxRate  Float           @default(0)
-  withholdingTaxAmount Float          @default(0)
-  netAmount           Float           @default(0)
+  id                   String          @id @default(cuid())
+  prepId               String
+  prep                 PaymentPrep     @relation(fields: [prepId], references: [id], onDelete: Cascade)
+  apId                 String
+  ap                   AccountsPayable @relation(fields: [apId], references: [id])
+  amount               Float
+  withholdingTaxRate   Float           @default(0)
+  withholdingTaxAmount Float           @default(0)
+  netAmount            Float           @default(0)
 }
 
 model Payment {

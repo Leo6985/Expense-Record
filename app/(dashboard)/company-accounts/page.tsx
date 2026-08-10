@@ -6,6 +6,9 @@ import {
   createCompanyBankAccount,
   updateCompanyBankAccount,
 } from "@/actions/payments";
+import { getReceiptsForBankAccount } from "@/actions/receipts";
+import { formatDate, formatCurrency } from "@/lib/utils";
+import Link from "next/link";
 import CompanyBankAccountCsvImport from "./CompanyBankAccountCsvImport";
 
 type Account = {
@@ -17,12 +20,17 @@ type Account = {
   isActive: boolean;
 };
 
+type ReceiptHistory = Awaited<ReturnType<typeof getReceiptsForBankAccount>>;
+
 export default function CompanyAccountsPage() {
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [showForm, setShowForm] = useState(false);
   const [loading, setLoading] = useState(false);
   const [form, setForm] = useState({ bankName: "", branch: "", accountNo: "", accountName: "" });
   const [error, setError] = useState("");
+  const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [receiptsByAccount, setReceiptsByAccount] = useState<Record<string, ReceiptHistory>>({});
+  const [historyLoading, setHistoryLoading] = useState<string | null>(null);
 
   useEffect(() => {
     getCompanyBankAccounts().then((a) => setAccounts(a as Account[]));
@@ -54,8 +62,22 @@ export default function CompanyAccountsPage() {
     setAccounts(accounts.map((a) => (a.id === id ? { ...a, isActive: !isActive } : a)));
   }
 
+  async function toggleHistory(id: string) {
+    if (expandedId === id) {
+      setExpandedId(null);
+      return;
+    }
+    setExpandedId(id);
+    if (!receiptsByAccount[id]) {
+      setHistoryLoading(id);
+      const receipts = await getReceiptsForBankAccount(id);
+      setReceiptsByAccount((prev) => ({ ...prev, [id]: receipts }));
+      setHistoryLoading(null);
+    }
+  }
+
   return (
-    <div className="max-w-2xl">
+    <div className="max-w-3xl">
       <div className="flex items-center justify-between mb-6">
         <h1 className="text-2xl font-bold text-gray-900">บัญชีธนาคารบริษัท</h1>
         <div className="flex items-center gap-3">
@@ -129,28 +151,75 @@ export default function CompanyAccountsPage() {
             ยังไม่มีบัญชีธนาคาร
           </div>
         ) : (
-          accounts.map((acct) => (
-            <div key={acct.id} className={`bg-white rounded-xl border p-4 flex items-center gap-4 ${acct.isActive ? "border-gray-200" : "border-gray-100 opacity-60"}`}>
-              <div className="w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center text-blue-700 font-bold text-sm flex-shrink-0">
-                🏦
+          accounts.map((acct) => {
+            const receipts = receiptsByAccount[acct.id];
+            const totalReceived = receipts?.reduce((sum, r) => sum + r.totalAmount, 0) ?? 0;
+            const isExpanded = expandedId === acct.id;
+            return (
+              <div key={acct.id} className={`bg-white rounded-xl border overflow-hidden ${acct.isActive ? "border-gray-200" : "border-gray-100 opacity-60"}`}>
+                <div className="p-4 flex items-center gap-4">
+                  <div className="w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center text-blue-700 font-bold text-sm flex-shrink-0">
+                    🏦
+                  </div>
+                  <div className="flex-1">
+                    <div className="font-medium text-gray-900">{acct.bankName} {acct.branch && `· ${acct.branch}`}</div>
+                    <div className="text-sm text-gray-500 font-mono">{acct.accountNo} | {acct.accountName}</div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className={`text-xs px-2 py-0.5 rounded-full ${acct.isActive ? "bg-green-100 text-green-700" : "bg-gray-100 text-gray-500"}`}>
+                      {acct.isActive ? "ใช้งาน" : "ปิดใช้งาน"}
+                    </span>
+                    <button
+                      onClick={() => toggleHistory(acct.id)}
+                      className="text-xs text-blue-600 hover:underline"
+                    >
+                      {isExpanded ? "ซ่อนประวัติรับเงิน" : "ดูประวัติรับเงิน"}
+                    </button>
+                    <button
+                      onClick={() => handleToggle(acct.id, acct.isActive)}
+                      className="text-xs text-gray-400 hover:text-gray-600 underline"
+                    >
+                      {acct.isActive ? "ปิด" : "เปิด"}
+                    </button>
+                  </div>
+                </div>
+
+                {isExpanded && (
+                  <div className="border-t border-gray-100 bg-gray-50 px-4 py-3">
+                    {historyLoading === acct.id ? (
+                      <p className="text-sm text-gray-400 text-center py-3">กำลังโหลด...</p>
+                    ) : !receipts || receipts.length === 0 ? (
+                      <p className="text-sm text-gray-400 text-center py-3">ยังไม่มีประวัติรับเงินในบัญชีนี้</p>
+                    ) : (
+                      <div className="space-y-2">
+                        {receipts.map((r) => (
+                          <div key={r.id} className="flex items-center justify-between text-sm bg-white rounded-lg border border-gray-100 px-3 py-2">
+                            <div>
+                              <Link href={`/receipts/${r.id}`} className="font-mono text-blue-700 hover:underline">
+                                {r.receiptNumber}
+                              </Link>
+                              <span className="text-gray-400 ml-2">{formatDate(r.receiptDate)}</span>
+                              <span className="text-gray-500 ml-2">
+                                {[...new Set(r.items.map((i) => i.invoice.customer.name))].join(", ")}
+                              </span>
+                              {r.status === "DRAFT" && (
+                                <span className="ml-2 text-xs bg-gray-100 text-gray-500 px-1.5 py-0.5 rounded">ร่าง</span>
+                              )}
+                            </div>
+                            <span className="font-medium">฿{formatCurrency(r.totalAmount)}</span>
+                          </div>
+                        ))}
+                        <div className="flex justify-between text-sm font-bold text-blue-700 border-t border-gray-200 pt-2 px-1">
+                          <span>รับเงินรวม</span>
+                          <span>฿{formatCurrency(totalReceived)}</span>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
-              <div className="flex-1">
-                <div className="font-medium text-gray-900">{acct.bankName} {acct.branch && `· ${acct.branch}`}</div>
-                <div className="text-sm text-gray-500 font-mono">{acct.accountNo} | {acct.accountName}</div>
-              </div>
-              <div className="flex items-center gap-2">
-                <span className={`text-xs px-2 py-0.5 rounded-full ${acct.isActive ? "bg-green-100 text-green-700" : "bg-gray-100 text-gray-500"}`}>
-                  {acct.isActive ? "ใช้งาน" : "ปิดใช้งาน"}
-                </span>
-                <button
-                  onClick={() => handleToggle(acct.id, acct.isActive)}
-                  className="text-xs text-gray-400 hover:text-gray-600 underline"
-                >
-                  {acct.isActive ? "ปิด" : "เปิด"}
-                </button>
-              </div>
-            </div>
-          ))
+            );
+          })
         )}
       </div>
     </div>

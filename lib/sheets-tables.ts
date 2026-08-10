@@ -438,3 +438,137 @@ export const PAYMENT_COLUMNS: ColumnDef[] = [
 ];
 
 export const paymentsTable = new SheetTable<PaymentRecord>(PAYMENT_TAB_NAME, PAYMENT_COLUMNS);
+
+export type CustomerRecord = {
+  id: string;
+  code: string;
+  name: string;
+  taxId: string | null;
+  address: string | null;
+  contactPerson: string | null;
+  phone: string | null;
+  email: string | null;
+  isActive: boolean;
+  createdAt: Date;
+  updatedAt: Date;
+};
+
+export const CUSTOMER_TAB_NAME = "Customers";
+
+export const CUSTOMER_COLUMNS: ColumnDef[] = [
+  { key: "id", type: "string" },
+  { key: "code", type: "string" },
+  { key: "name", type: "string" },
+  { key: "taxId", type: "string" },
+  { key: "address", type: "string" },
+  { key: "contactPerson", type: "string" },
+  { key: "phone", type: "string" },
+  { key: "email", type: "string" },
+  { key: "isActive", type: "boolean" },
+  { key: "createdAt", type: "date" },
+  { key: "updatedAt", type: "date" },
+];
+
+export const customersTable = new SheetTable<CustomerRecord>(CUSTOMER_TAB_NAME, CUSTOMER_COLUMNS);
+
+export type SalesInvoiceRecord = {
+  id: string;
+  invoiceNumber: string;
+  invoiceDate: Date;
+  customerId: string;
+  amount: number;
+  vatAmount: number;
+  totalAmount: number;
+  status: string;
+  notes: string | null;
+  createdByName: string | null;
+  createdById: string | null;
+  createdAt: Date;
+  updatedAt: Date;
+};
+
+export const SALES_INVOICE_TAB_NAME = "SalesInvoices";
+
+export const SALES_INVOICE_COLUMNS: ColumnDef[] = [
+  { key: "id", type: "string" },
+  { key: "invoiceNumber", type: "string" },
+  { key: "invoiceDate", type: "date" },
+  { key: "customerId", type: "string" },
+  { key: "amount", type: "number" },
+  { key: "vatAmount", type: "number" },
+  { key: "totalAmount", type: "number" },
+  { key: "status", type: "string" },
+  { key: "notes", type: "string" },
+  { key: "createdByName", type: "string" },
+  { key: "createdById", type: "string" },
+  { key: "createdAt", type: "date" },
+  { key: "updatedAt", type: "date" },
+];
+
+export const salesInvoicesTable = new SheetTable<SalesInvoiceRecord>(
+  SALES_INVOICE_TAB_NAME,
+  SALES_INVOICE_COLUMNS
+);
+
+export type ReceiptRecord = {
+  id: string;
+  receiptNumber: string;
+  receiptDate: Date;
+  companyBankAccountId: string;
+  paymentMethod: string;
+  referenceNumber: string | null;
+  totalAmount: number;
+  status: string;
+  notes: string | null;
+  createdByName: string | null;
+  createdById: string | null;
+  approvedByName: string | null;
+  approvedById: string | null;
+  approvedAt: Date | null;
+  createdAt: Date;
+  updatedAt: Date;
+};
+
+export const RECEIPT_TAB_NAME = "Receipts";
+
+export const RECEIPT_COLUMNS: ColumnDef[] = [
+  { key: "id", type: "string" },
+  { key: "receiptNumber", type: "string" },
+  { key: "receiptDate", type: "date" },
+  { key: "companyBankAccountId", type: "string" },
+  { key: "paymentMethod", type: "string" },
+  { key: "referenceNumber", type: "string" },
+  { key: "totalAmount", type: "number" },
+  { key: "status", type: "string" },
+  { key: "notes", type: "string" },
+  { key: "createdByName", type: "string" },
+  { key: "createdById", type: "string" },
+  { key: "approvedByName", type: "string" },
+  { key: "approvedById", type: "string" },
+  { key: "approvedAt", type: "date" },
+  { key: "createdAt", type: "date" },
+  { key: "updatedAt", type: "date" },
+];
+
+export const receiptsTable = new SheetTable<ReceiptRecord>(RECEIPT_TAB_NAME, RECEIPT_COLUMNS);
+
+export type ReceiptItemRecord = {
+  id: string;
+  receiptId: string;
+  invoiceId: string;
+  amount: number;
+};
+
+export const RECEIPT_ITEM_TAB_NAME = "ReceiptItems";
+
+export const RECEIPT_ITEM_COLUMNS: ColumnDef[] = [
+  { key: "id", type: "string" },
+  { key: "receiptId", type: "string" },
+  { key: "invoiceId", type: "string" },
+  { key: "amount", type: "number" },
+];
+
+export const receiptItemsTable = new SheetTable<ReceiptItemRecord>(
+  RECEIPT_ITEM_TAB_NAME,
+  RECEIPT_ITEM_COLUMNS
+);

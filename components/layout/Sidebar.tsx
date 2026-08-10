@@ -27,10 +27,19 @@ const menuGroups: MenuGroup[] = [
     ],
   },
   {
+    label: "ขายและลูกหนี้",
+    roles: ["ACCOUNTING", "OWNER"],
+    items: [
+      { href: "/sales-invoices", label: "ใบกำกับภาษีขาย", icon: "🧾" },
+      { href: "/receipts", label: "รับชำระเงิน", icon: "💰" },
+    ],
+  },
+  {
     label: "ข้อมูลหลัก",
     roles: ["PURCHASING", "ACCOUNTING", "OWNER"],
     items: [
       { href: "/vendors", label: "ผู้ขาย", icon: "🏢" },
+      { href: "/customers", label: "ลูกค้า", icon: "🧑‍💼" },
       { href: "/products", label: "สินค้าและบริการ", icon: "📦" },
       { href: "/chart-of-accounts", label: "ผังบัญชี", icon: "📊" },
       { href: "/company-accounts", label: "บัญชีบริษัท", icon: "🏦" },
