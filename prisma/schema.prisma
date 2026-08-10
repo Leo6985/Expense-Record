@@ -119,23 +119,29 @@ model SalesInvoice {
 }
 
 model Receipt {
-  id                   String             @id @default(cuid())
-  receiptNumber        String             @unique
-  receiptDate          DateTime           @default(now())
-  companyBankAccountId String
-  companyBankAccount   CompanyBankAccount @relation(fields: [companyBankAccountId], references: [id])
-  paymentMethod        String
-  referenceNumber      String?
-  totalAmount          Float
-  status               String             @default("DRAFT")
-  notes                String?
-  createdByName        String?
-  createdById          String?
-  approvedByName       String?
-  approvedById         String?
-  approvedAt           DateTime?
-  createdAt            DateTime           @default(now())
-  updatedAt            DateTime           @updatedAt
+  id                       String             @id @default(cuid())
+  receiptNumber            String             @unique
+  receiptDate              DateTime           @default(now())
+  recordedDate             DateTime           @default(now())
+  companyBankAccountId     String
+  companyBankAccount       CompanyBankAccount @relation(fields: [companyBankAccountId], references: [id])
+  paymentMethod            String
+  referenceNumber          String?
+  totalAmount              Float
+  feeAmount                Float              @default(0)
+  withholdingTaxAmount     Float              @default(0)
+  withholdingTaxCertNumber String?
+  actualReceivedAmount     Float
+  shortageOrExcessAmount   Float              @default(0)
+  status                   String             @default("DRAFT")
+  notes                    String?
+  createdByName            String?
+  createdById              String?
+  approvedByName           String?
+  approvedById             String?
+  approvedAt               DateTime?
+  createdAt                DateTime           @default(now())
+  updatedAt                DateTime           @updatedAt
 
   items ReceiptItem[]
 }

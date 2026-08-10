@@ -153,7 +153,7 @@ export default function CompanyAccountsPage() {
         ) : (
           accounts.map((acct) => {
             const receipts = receiptsByAccount[acct.id];
-            const totalReceived = receipts?.reduce((sum, r) => sum + r.totalAmount, 0) ?? 0;
+            const totalReceived = receipts?.reduce((sum, r) => sum + r.actualReceivedAmount, 0) ?? 0;
             const isExpanded = expandedId === acct.id;
             return (
               <div key={acct.id} className={`bg-white rounded-xl border overflow-hidden ${acct.isActive ? "border-gray-200" : "border-gray-100 opacity-60"}`}>
@@ -205,12 +205,17 @@ export default function CompanyAccountsPage() {
                               {r.status === "DRAFT" && (
                                 <span className="ml-2 text-xs bg-gray-100 text-gray-500 px-1.5 py-0.5 rounded">ร่าง</span>
                               )}
+                              {r.shortageOrExcessAmount !== 0 && (
+                                <span className={`ml-2 text-xs px-1.5 py-0.5 rounded ${r.shortageOrExcessAmount > 0 ? "bg-green-100 text-green-700" : "bg-red-100 text-red-700"}`}>
+                                  {r.shortageOrExcessAmount > 0 ? "เกิน" : "ขาด"} ฿{formatCurrency(Math.abs(r.shortageOrExcessAmount))}
+                                </span>
+                              )}
                             </div>
-                            <span className="font-medium">฿{formatCurrency(r.totalAmount)}</span>
+                            <span className="font-medium">฿{formatCurrency(r.actualReceivedAmount)}</span>
                           </div>
                         ))}
                         <div className="flex justify-between text-sm font-bold text-blue-700 border-t border-gray-200 pt-2 px-1">
-                          <span>รับเงินรวม</span>
+                          <span>รับเงินรวม (ยอดรับจริง)</span>
                           <span>฿{formatCurrency(totalReceived)}</span>
                         </div>
                       </div>

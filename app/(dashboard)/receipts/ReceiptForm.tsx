@@ -21,18 +21,28 @@ type BankAccount = { id: string; bankName: string; branch: string | null; accoun
 
 export type ReceiptFormInitial = {
   receiptDate: string;
+  recordedDate: string;
   companyBankAccountId: string;
   paymentMethod: string;
   referenceNumber: string;
+  feeAmount: string;
+  withholdingTaxAmount: string;
+  withholdingTaxCertNumber: string;
+  actualReceivedAmount: string;
   notes: string;
   items: { invoiceId: string; amount: string }[];
 };
 
 export type ReceiptFormValues = {
   receiptDate: string;
+  recordedDate: string;
   companyBankAccountId: string;
   paymentMethod: string;
   referenceNumber?: string;
+  feeAmount?: number;
+  withholdingTaxAmount?: number;
+  withholdingTaxCertNumber?: string;
+  actualReceivedAmount: number;
   notes?: string;
   items: { invoiceId: string; amount: number }[];
 };
@@ -62,10 +72,17 @@ export default function ReceiptForm({
   const [amounts, setAmounts] = useState<Record<string, string>>(
     Object.fromEntries((initialValues?.items ?? []).map((i) => [i.invoiceId, i.amount]))
   );
-  const [receiptDate, setReceiptDate] = useState(initialValues?.receiptDate ?? new Date().toISOString().split("T")[0]);
+  const today = new Date().toISOString().split("T")[0];
+  const [receiptDate, setReceiptDate] = useState(initialValues?.receiptDate ?? today);
+  const [recordedDate, setRecordedDate] = useState(initialValues?.recordedDate ?? today);
   const [companyBankAccountId, setCompanyBankAccountId] = useState(initialValues?.companyBankAccountId ?? "");
   const [paymentMethod, setPaymentMethod] = useState(initialValues?.paymentMethod ?? "โอนเงิน");
   const [referenceNumber, setReferenceNumber] = useState(initialValues?.referenceNumber ?? "");
+  const [feeAmount, setFeeAmount] = useState(initialValues?.feeAmount ?? "0");
+  const [withholdingTaxAmount, setWithholdingTaxAmount] = useState(initialValues?.withholdingTaxAmount ?? "0");
+  const [withholdingTaxCertNumber, setWithholdingTaxCertNumber] = useState(initialValues?.withholdingTaxCertNumber ?? "");
+  const [actualReceivedAmount, setActualReceivedAmount] = useState(initialValues?.actualReceivedAmount ?? "");
+  const [actualReceivedTouched, setActualReceivedTouched] = useState(!!initialValues);
   const [notes, setNotes] = useState(initialValues?.notes ?? "");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -109,6 +126,18 @@ export default function ReceiptForm({
     return { invoice: inv, amount };
   });
   const totalAmount = lines.reduce((sum, l) => sum + l.amount, 0);
+  const feeAmountNum = parseFloat(feeAmount || "0") || 0;
+  const withholdingTaxAmountNum = parseFloat(withholdingTaxAmount || "0") || 0;
+  const netExpectedAmount = Math.round((totalAmount - feeAmountNum - withholdingTaxAmountNum) * 100) / 100;
+  const actualReceivedAmountNum = parseFloat(actualReceivedAmount || "0") || 0;
+  const shortageOrExcess = Math.round((actualReceivedAmountNum - netExpectedAmount) * 100) / 100;
+
+  // Keep "ยอดรับจริง" pre-filled with the expected net amount until the user edits it directly,
+  // so a receipt with no fee/WHT/discrepancy doesn't force a redundant manual entry.
+  useEffect(() => {
+    if (!actualReceivedTouched) setActualReceivedAmount(String(netExpectedAmount));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [netExpectedAmount, actualReceivedTouched]);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -135,9 +164,14 @@ export default function ReceiptForm({
     try {
       await onSubmit({
         receiptDate,
+        recordedDate,
         companyBankAccountId,
         paymentMethod,
         referenceNumber: referenceNumber || undefined,
+        feeAmount: feeAmountNum || undefined,
+        withholdingTaxAmount: withholdingTaxAmountNum || undefined,
+        withholdingTaxCertNumber: withholdingTaxCertNumber || undefined,
+        actualReceivedAmount: actualReceivedAmountNum,
         notes: notes || undefined,
         items: lines.map((l) => ({ invoiceId: l.invoice.id, amount: l.amount })),
       });
@@ -170,6 +204,16 @@ export default function ReceiptForm({
                 type="date"
                 value={receiptDate}
                 onChange={(e) => setReceiptDate(e.target.value)}
+                required
+                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">วันที่บันทึกข้อมูล *</label>
+              <input
+                type="date"
+                value={recordedDate}
+                onChange={(e) => setRecordedDate(e.target.value)}
                 required
                 className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
               />
@@ -306,6 +350,68 @@ export default function ReceiptForm({
               </div>
             </div>
           )}
+        </div>
+
+        <div className="bg-white rounded-xl border border-gray-200 p-5">
+          <h2 className="font-semibold text-gray-900 mb-4 pb-2 border-b border-gray-100">ค่าธรรมเนียม / ภาษีหัก ณ ที่จ่าย / กระทบยอด</h2>
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">ค่าธรรมเนียม</label>
+              <input
+                type="number"
+                min="0"
+                step="0.01"
+                value={feeAmount}
+                onChange={(e) => setFeeAmount(e.target.value)}
+                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm text-right focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">ภาษีหัก ณ ที่จ่าย</label>
+              <input
+                type="number"
+                min="0"
+                step="0.01"
+                value={withholdingTaxAmount}
+                onChange={(e) => setWithholdingTaxAmount(e.target.value)}
+                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm text-right focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+            </div>
+            <div className="col-span-2">
+              <label className="block text-sm font-medium text-gray-700 mb-1">เลขที่ใบหัก ณ ที่จ่าย</label>
+              <input
+                value={withholdingTaxCertNumber}
+                onChange={(e) => setWithholdingTaxCertNumber(e.target.value)}
+                placeholder="เลขที่หนังสือรับรองการหักภาษี ณ ที่จ่าย"
+                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+            </div>
+          </div>
+
+          <div className="mt-4 pt-4 border-t border-gray-100 space-y-2 text-sm">
+            <div className="flex justify-between text-gray-600">
+              <span>ยอดสุทธิที่คาดว่าจะได้รับ (ยอดรับชำระรวม − ภาษีหัก − ค่าธรรมเนียม)</span>
+              <span>฿{formatCurrency(netExpectedAmount)}</span>
+            </div>
+            <div className="flex items-center justify-between gap-3">
+              <label className="text-gray-700 font-medium whitespace-nowrap">ยอดรับจริง (ตามใบนำฝาก/statement) *</label>
+              <input
+                type="number"
+                step="0.01"
+                value={actualReceivedAmount}
+                onChange={(e) => {
+                  setActualReceivedTouched(true);
+                  setActualReceivedAmount(e.target.value);
+                }}
+                required
+                className="w-40 border border-gray-300 rounded-lg px-3 py-2 text-sm text-right focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+            </div>
+            <div className={`flex justify-between font-bold text-base border-t border-gray-100 pt-2 ${shortageOrExcess === 0 ? "text-gray-700" : shortageOrExcess > 0 ? "text-green-700" : "text-red-600"}`}>
+              <span>เงินขาด / เกิน</span>
+              <span>{shortageOrExcess > 0 ? "+" : ""}฿{formatCurrency(shortageOrExcess)}</span>
+            </div>
+          </div>
         </div>
 
         {error && (

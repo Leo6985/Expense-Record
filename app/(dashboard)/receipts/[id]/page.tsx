@@ -115,6 +115,7 @@ export default function ReceiptDetailPage() {
         <div className="grid grid-cols-2 gap-4 text-sm mb-5">
           <div><div className="text-xs text-gray-500">เลขที่</div><div className="font-mono font-medium">{receipt.receiptNumber}</div></div>
           <div><div className="text-xs text-gray-500">วันที่รับชำระ</div><div className="font-medium">{formatDate(receipt.receiptDate)}</div></div>
+          <div><div className="text-xs text-gray-500">วันที่บันทึกข้อมูล</div><div className="font-medium">{formatDate(receipt.recordedDate)}</div></div>
           <div><div className="text-xs text-gray-500">วิธีการรับชำระ</div><div className="font-medium">{receipt.paymentMethod}</div></div>
           {receipt.referenceNumber && <div><div className="text-xs text-gray-500">เลขที่อ้างอิง</div><div className="font-mono font-medium">{receipt.referenceNumber}</div></div>}
           <div className="col-span-2"><div className="text-xs text-gray-500">บัญชีที่รับเงิน</div><div className="font-medium">{receipt.companyBankAccount.bankName} {receipt.companyBankAccount.accountNo} {receipt.companyBankAccount.accountName}</div></div>
@@ -154,6 +155,40 @@ export default function ReceiptDetailPage() {
             </tr>
           </tfoot>
         </table>
+      </div>
+
+      <div className="bg-white rounded-xl border border-gray-200 p-5">
+        <h2 className="font-semibold text-gray-900 mb-4 pb-2 border-b border-gray-100">ค่าธรรมเนียม / ภาษีหัก ณ ที่จ่าย / กระทบยอด</h2>
+        <div className="space-y-2 text-sm">
+          <div className="flex justify-between text-gray-600">
+            <span>ยอดรับชำระรวม</span>
+            <span>฿{formatCurrency(receipt.totalAmount)}</span>
+          </div>
+          <div className="flex justify-between text-gray-600">
+            <span>ค่าธรรมเนียม</span>
+            <span>฿{formatCurrency(receipt.feeAmount)}</span>
+          </div>
+          <div className="flex justify-between text-gray-600">
+            <span>ภาษีหัก ณ ที่จ่าย{receipt.withholdingTaxCertNumber && ` (เลขที่ใบหัก ${receipt.withholdingTaxCertNumber})`}</span>
+            <span>฿{formatCurrency(receipt.withholdingTaxAmount)}</span>
+          </div>
+          <div className="flex justify-between text-gray-600 border-t border-gray-100 pt-2">
+            <span>ยอดสุทธิที่คาดว่าจะได้รับ</span>
+            <span>฿{formatCurrency(receipt.totalAmount - receipt.feeAmount - receipt.withholdingTaxAmount)}</span>
+          </div>
+          <div className="flex justify-between font-medium text-gray-900">
+            <span>ยอดรับจริง</span>
+            <span>฿{formatCurrency(receipt.actualReceivedAmount)}</span>
+          </div>
+          <div
+            className={`flex justify-between font-bold text-base border-t border-gray-200 pt-2 ${
+              receipt.shortageOrExcessAmount === 0 ? "text-gray-700" : receipt.shortageOrExcessAmount > 0 ? "text-green-700" : "text-red-600"
+            }`}
+          >
+            <span>เงินขาด / เกิน</span>
+            <span>{receipt.shortageOrExcessAmount > 0 ? "+" : ""}฿{formatCurrency(receipt.shortageOrExcessAmount)}</span>
+          </div>
+        </div>
       </div>
     </div>
   );

@@ -18,10 +18,16 @@ async function syncReceiptToSheet(receipt: {
   id: string;
   receiptNumber: string;
   receiptDate: Date;
+  recordedDate: Date;
   companyBankAccountId: string;
   paymentMethod: string;
   referenceNumber: string | null;
   totalAmount: number;
+  feeAmount: number;
+  withholdingTaxAmount: number;
+  withholdingTaxCertNumber: string | null;
+  actualReceivedAmount: number;
+  shortageOrExcessAmount: number;
   status: string;
   notes: string | null;
   createdByName: string | null;
@@ -114,14 +120,28 @@ async function buildReceiptItems(items: ReceiptItemInput[], excludeReceiptId?: s
   });
 }
 
-export async function createReceipt(data: {
+// เงินขาด/เกิน = ยอดรับจริง − (ยอดใบกำกับภาษีที่ตัดชำระ − ภาษีหัก ณ ที่จ่าย − ค่าธรรมเนียม).
+// Recomputed server-side from the raw inputs rather than trusted from the client, mirroring
+// how summarize() derives netPayableAmount in payment-prep.ts.
+function computeShortageOrExcess(totalAmount: number, feeAmount: number, withholdingTaxAmount: number, actualReceivedAmount: number) {
+  const netExpectedAmount = totalAmount - feeAmount - withholdingTaxAmount;
+  return Math.round((actualReceivedAmount - netExpectedAmount) * 100) / 100;
+}
+
+type ReceiptHeaderInput = {
   receiptDate: string;
+  recordedDate: string;
   companyBankAccountId: string;
   paymentMethod: string;
   referenceNumber?: string;
+  feeAmount?: number;
+  withholdingTaxAmount?: number;
+  withholdingTaxCertNumber?: string;
+  actualReceivedAmount: number;
   notes?: string;
-  items: ReceiptItemInput[];
-}) {
+};
+
+export async function createReceipt(data: ReceiptHeaderInput & { items: ReceiptItemInput[] }) {
   const session = await auth();
   const createdByName = (session?.user as { name?: string })?.name ?? "";
   const createdById = (session?.user as { id?: string })?.id ?? "";
@@ -131,16 +151,25 @@ export async function createReceipt(data: {
   const receiptNumber = await getNextReceiptNumber();
   const items = await buildReceiptItems(data.items);
   const totalAmount = Math.round(items.reduce((s, i) => s + i.amount, 0) * 100) / 100;
+  const feeAmount = data.feeAmount ?? 0;
+  const withholdingTaxAmount = data.withholdingTaxAmount ?? 0;
+  const shortageOrExcessAmount = computeShortageOrExcess(totalAmount, feeAmount, withholdingTaxAmount, data.actualReceivedAmount);
 
   const receipt = await prisma.$transaction(async (tx) => {
     const r = await tx.receipt.create({
       data: {
         receiptNumber,
         receiptDate: new Date(data.receiptDate),
+        recordedDate: new Date(data.recordedDate),
         companyBankAccountId: data.companyBankAccountId,
         paymentMethod: data.paymentMethod,
         referenceNumber: data.referenceNumber,
         totalAmount,
+        feeAmount,
+        withholdingTaxAmount,
+        withholdingTaxCertNumber: data.withholdingTaxCertNumber,
+        actualReceivedAmount: data.actualReceivedAmount,
+        shortageOrExcessAmount,
         notes: data.notes,
         createdByName,
         createdById,
@@ -163,17 +192,7 @@ export async function createReceipt(data: {
   return receipt;
 }
 
-export async function updateReceipt(
-  id: string,
-  data: {
-    receiptDate: string;
-    companyBankAccountId: string;
-    paymentMethod: string;
-    referenceNumber?: string;
-    notes?: string;
-    items: ReceiptItemInput[];
-  }
-) {
+export async function updateReceipt(id: string, data: ReceiptHeaderInput & { items: ReceiptItemInput[] }) {
   const receipt = await prisma.receipt.findUniqueOrThrow({ where: { id }, include: { items: true } });
   if (receipt.status === "CANCELLED") throw new Error("ไม่สามารถแก้ไขการตัดชำระที่ยกเลิกแล้วได้");
   if (receipt.status === "APPROVED") throw new Error("ไม่สามารถแก้ไขได้ เนื่องจากอนุมัติแล้ว กรุณายกเลิกอนุมัติก่อน");
@@ -182,16 +201,25 @@ export async function updateReceipt(
   const oldInvoiceIds = receipt.items.map((item) => item.invoiceId);
   const newItems = await buildReceiptItems(data.items, id);
   const totalAmount = Math.round(newItems.reduce((s, i) => s + i.amount, 0) * 100) / 100;
+  const feeAmount = data.feeAmount ?? 0;
+  const withholdingTaxAmount = data.withholdingTaxAmount ?? 0;
+  const shortageOrExcessAmount = computeShortageOrExcess(totalAmount, feeAmount, withholdingTaxAmount, data.actualReceivedAmount);
 
   const updated = await prisma.$transaction(async (tx) => {
     const r = await tx.receipt.update({
       where: { id },
       data: {
         receiptDate: new Date(data.receiptDate),
+        recordedDate: new Date(data.recordedDate),
         companyBankAccountId: data.companyBankAccountId,
         paymentMethod: data.paymentMethod,
         referenceNumber: data.referenceNumber,
         totalAmount,
+        feeAmount,
+        withholdingTaxAmount,
+        withholdingTaxCertNumber: data.withholdingTaxCertNumber,
+        actualReceivedAmount: data.actualReceivedAmount,
+        shortageOrExcessAmount,
         notes: data.notes,
         items: {
           deleteMany: {},

@@ -514,10 +514,16 @@ export type ReceiptRecord = {
   id: string;
   receiptNumber: string;
   receiptDate: Date;
+  recordedDate: Date;
   companyBankAccountId: string;
   paymentMethod: string;
   referenceNumber: string | null;
   totalAmount: number;
+  feeAmount: number;
+  withholdingTaxAmount: number;
+  withholdingTaxCertNumber: string | null;
+  actualReceivedAmount: number;
+  shortageOrExcessAmount: number;
   status: string;
   notes: string | null;
   createdByName: string | null;
@@ -535,10 +541,16 @@ export const RECEIPT_COLUMNS: ColumnDef[] = [
   { key: "id", type: "string" },
   { key: "receiptNumber", type: "string" },
   { key: "receiptDate", type: "date" },
+  { key: "recordedDate", type: "date" },
   { key: "companyBankAccountId", type: "string" },
   { key: "paymentMethod", type: "string" },
   { key: "referenceNumber", type: "string" },
   { key: "totalAmount", type: "number" },
+  { key: "feeAmount", type: "number" },
+  { key: "withholdingTaxAmount", type: "number" },
+  { key: "withholdingTaxCertNumber", type: "string" },
+  { key: "actualReceivedAmount", type: "number" },
+  { key: "shortageOrExcessAmount", type: "number" },
   { key: "status", type: "string" },
   { key: "notes", type: "string" },
   { key: "createdByName", type: "string" },

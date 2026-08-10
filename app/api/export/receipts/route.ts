@@ -16,10 +16,16 @@ export async function GET() {
   const rows = receipts.map((r) => ({
     "เลขที่ใบรับชำระ": r.receiptNumber,
     "วันที่รับชำระ": r.receiptDate.toISOString().slice(0, 10),
+    "วันที่บันทึกข้อมูล": r.recordedDate.toISOString().slice(0, 10),
     "บัญชีธนาคาร": `${r.companyBankAccount.bankName} ${r.companyBankAccount.accountNo}`,
     "วิธีชำระ": r.paymentMethod,
     "จำนวนใบกำกับภาษี": r.items.length,
     "ยอดรวม": r.totalAmount,
+    "ค่าธรรมเนียม": r.feeAmount,
+    "ภาษีหัก ณ ที่จ่าย": r.withholdingTaxAmount,
+    "เลขที่ใบหัก ณ ที่จ่าย": r.withholdingTaxCertNumber ?? "",
+    "ยอดรับจริง": r.actualReceivedAmount,
+    "เงินขาด/เกิน": r.shortageOrExcessAmount,
     "สถานะ": STATUS_LABEL[r.status] ?? r.status,
   }));
 

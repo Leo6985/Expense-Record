@@ -39,9 +39,14 @@ export default function EditReceiptPage() {
 
   const initialValues: ReceiptFormInitial = {
     receiptDate: new Date(receipt.receiptDate).toISOString().split("T")[0],
+    recordedDate: new Date(receipt.recordedDate).toISOString().split("T")[0],
     companyBankAccountId: receipt.companyBankAccountId,
     paymentMethod: receipt.paymentMethod,
     referenceNumber: receipt.referenceNumber ?? "",
+    feeAmount: String(receipt.feeAmount),
+    withholdingTaxAmount: String(receipt.withholdingTaxAmount),
+    withholdingTaxCertNumber: receipt.withholdingTaxCertNumber ?? "",
+    actualReceivedAmount: String(receipt.actualReceivedAmount),
     notes: receipt.notes ?? "",
     items: receipt.items.map((item) => ({
       invoiceId: item.invoiceId,
