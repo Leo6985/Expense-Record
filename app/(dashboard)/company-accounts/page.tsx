@@ -17,6 +17,7 @@ type Account = {
   branch: string | null;
   accountNo: string;
   accountName: string;
+  openingBalance: number;
   isActive: boolean;
 };
 
@@ -26,11 +27,14 @@ export default function CompanyAccountsPage() {
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [showForm, setShowForm] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [form, setForm] = useState({ bankName: "", branch: "", accountNo: "", accountName: "" });
+  const [form, setForm] = useState({ bankName: "", branch: "", accountNo: "", accountName: "", openingBalance: "0" });
   const [error, setError] = useState("");
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [receiptsByAccount, setReceiptsByAccount] = useState<Record<string, ReceiptHistory>>({});
   const [historyLoading, setHistoryLoading] = useState<string | null>(null);
+  const [editingBalanceId, setEditingBalanceId] = useState<string | null>(null);
+  const [balanceInput, setBalanceInput] = useState("");
+  const [balanceSaving, setBalanceSaving] = useState(false);
 
   useEffect(() => {
     getCompanyBankAccounts().then((a) => setAccounts(a as Account[]));
@@ -46,10 +50,11 @@ export default function CompanyAccountsPage() {
         branch: form.branch || undefined,
         accountNo: form.accountNo,
         accountName: form.accountName,
+        openingBalance: parseFloat(form.openingBalance) || 0,
       });
       setAccounts([...accounts, newAcct as Account]);
       setShowForm(false);
-      setForm({ bankName: "", branch: "", accountNo: "", accountName: "" });
+      setForm({ bankName: "", branch: "", accountNo: "", accountName: "", openingBalance: "0" });
     } catch (err) {
       setError(err instanceof Error ? err.message : "เกิดข้อผิดพลาด");
     } finally {
@@ -60,6 +65,23 @@ export default function CompanyAccountsPage() {
   async function handleToggle(id: string, isActive: boolean) {
     await updateCompanyBankAccount(id, { isActive: !isActive });
     setAccounts(accounts.map((a) => (a.id === id ? { ...a, isActive: !isActive } : a)));
+  }
+
+  function startEditBalance(acct: Account) {
+    setEditingBalanceId(acct.id);
+    setBalanceInput(String(acct.openingBalance));
+  }
+
+  async function saveBalance(id: string) {
+    setBalanceSaving(true);
+    try {
+      const openingBalance = parseFloat(balanceInput) || 0;
+      await updateCompanyBankAccount(id, { openingBalance });
+      setAccounts(accounts.map((a) => (a.id === id ? { ...a, openingBalance } : a)));
+      setEditingBalanceId(null);
+    } finally {
+      setBalanceSaving(false);
+    }
   }
 
   async function toggleHistory(id: string) {
@@ -134,6 +156,16 @@ export default function CompanyAccountsPage() {
                 className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
               />
             </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">ยอดยกมา</label>
+              <input
+                type="number"
+                step="0.01"
+                value={form.openingBalance}
+                onChange={(e) => setForm({ ...form, openingBalance: e.target.value })}
+                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm text-right focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+            </div>
             {error && <div className="col-span-2 text-red-600 text-sm">{error}</div>}
             <div className="col-span-2 flex gap-2">
               <button type="submit" disabled={loading} className="bg-blue-700 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-blue-800 disabled:opacity-50">
@@ -164,6 +196,38 @@ export default function CompanyAccountsPage() {
                   <div className="flex-1">
                     <div className="font-medium text-gray-900">{acct.bankName} {acct.branch && `· ${acct.branch}`}</div>
                     <div className="text-sm text-gray-500 font-mono">{acct.accountNo} | {acct.accountName}</div>
+                    <div className="text-xs text-gray-500 mt-1 flex items-center gap-1.5">
+                      <span>ยอดยกมา:</span>
+                      {editingBalanceId === acct.id ? (
+                        <>
+                          <input
+                            type="number"
+                            step="0.01"
+                            autoFocus
+                            value={balanceInput}
+                            onChange={(e) => setBalanceInput(e.target.value)}
+                            className="w-28 border border-gray-300 rounded px-1.5 py-0.5 text-xs text-right focus:outline-none focus:ring-1 focus:ring-blue-400"
+                          />
+                          <button
+                            onClick={() => saveBalance(acct.id)}
+                            disabled={balanceSaving}
+                            className="text-blue-600 hover:underline disabled:opacity-50"
+                          >
+                            บันทึก
+                          </button>
+                          <button onClick={() => setEditingBalanceId(null)} className="text-gray-400 hover:underline">
+                            ยกเลิก
+                          </button>
+                        </>
+                      ) : (
+                        <>
+                          <span className="font-medium text-gray-700">฿{formatCurrency(acct.openingBalance)}</span>
+                          <button onClick={() => startEditBalance(acct)} className="text-blue-600 hover:underline">
+                            แก้ไข
+                          </button>
+                        </>
+                      )}
+                    </div>
                   </div>
                   <div className="flex items-center gap-2">
                     <span className={`text-xs px-2 py-0.5 rounded-full ${acct.isActive ? "bg-green-100 text-green-700" : "bg-gray-100 text-gray-500"}`}>
@@ -214,9 +278,17 @@ export default function CompanyAccountsPage() {
                             <span className="font-medium">฿{formatCurrency(r.actualReceivedAmount)}</span>
                           </div>
                         ))}
-                        <div className="flex justify-between text-sm font-bold text-blue-700 border-t border-gray-200 pt-2 px-1">
+                        <div className="flex justify-between text-sm text-gray-500 pt-2 px-1 border-t border-gray-200">
+                          <span>ยอดยกมา</span>
+                          <span>฿{formatCurrency(acct.openingBalance)}</span>
+                        </div>
+                        <div className="flex justify-between text-sm font-bold text-blue-700 px-1">
                           <span>รับเงินรวม (ยอดรับจริง)</span>
                           <span>฿{formatCurrency(totalReceived)}</span>
+                        </div>
+                        <div className="flex justify-between text-sm font-bold text-gray-900 border-t border-gray-200 pt-2 px-1">
+                          <span>ยอดคงเหลือ (ยกมา + รับเงินรวม)</span>
+                          <span>฿{formatCurrency(acct.openingBalance + totalReceived)}</span>
                         </div>
                       </div>
                     )}

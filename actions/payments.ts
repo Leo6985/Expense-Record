@@ -48,6 +48,7 @@ async function syncCompanyBankAccountToSheet(account: {
   branch: string | null;
   accountNo: string;
   accountName: string;
+  openingBalance: number;
   isActive: boolean;
   createdAt: Date;
 }) {
@@ -212,6 +213,7 @@ export async function createCompanyBankAccount(data: {
   branch?: string;
   accountNo: string;
   accountName: string;
+  openingBalance?: number;
 }) {
   const account = await prisma.companyBankAccount.create({ data });
   await syncCompanyBankAccountToSheet(account);
@@ -226,6 +228,7 @@ export async function updateCompanyBankAccount(
     branch?: string;
     accountNo?: string;
     accountName?: string;
+    openingBalance?: number;
     isActive?: boolean;
   }
 ) {

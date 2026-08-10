@@ -32,6 +32,7 @@ const menuGroups: MenuGroup[] = [
     items: [
       { href: "/sales-invoices", label: "ใบกำกับภาษีขาย", icon: "🧾" },
       { href: "/receipts", label: "รับชำระเงิน", icon: "💰" },
+      { href: "/debit-credit-notes", label: "ใบเพิ่ม/ลดหนี้", icon: "📝" },
     ],
   },
   {

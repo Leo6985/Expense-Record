@@ -71,13 +71,14 @@ model Product {
 }
 
 model CompanyBankAccount {
-  id          String   @id @default(cuid())
-  bankName    String
-  branch      String?
-  accountNo   String
-  accountName String
-  isActive    Boolean  @default(true)
-  createdAt   DateTime @default(now())
+  id             String   @id @default(cuid())
+  bankName       String
+  branch         String?
+  accountNo      String
+  accountName    String
+  openingBalance Float    @default(0)
+  isActive       Boolean  @default(true)
+  createdAt      DateTime @default(now())
 
   payments Payment[]
   receipts Receipt[]
@@ -92,6 +93,7 @@ model Customer {
   contactPerson String?
   phone         String?
   email         String?
+  creditDays    Int      @default(30)
   isActive      Boolean  @default(true)
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
@@ -103,6 +105,7 @@ model SalesInvoice {
   id            String   @id @default(cuid())
   invoiceNumber String   @unique
   invoiceDate   DateTime
+  dueDate       DateTime @default(now())
   customerId    String
   customer      Customer @relation(fields: [customerId], references: [id])
   amount        Float
@@ -115,7 +118,30 @@ model SalesInvoice {
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 
-  receiptItems ReceiptItem[]
+  receiptItems     ReceiptItem[]
+  debitCreditNotes DebitCreditNote[]
+}
+
+model DebitCreditNote {
+  id             String       @id @default(cuid())
+  noteNumber     String       @unique
+  type           String // DEBIT | CREDIT
+  noteDate       DateTime     @default(now())
+  invoiceId      String
+  invoice        SalesInvoice @relation(fields: [invoiceId], references: [id])
+  amount         Float
+  vatAmount      Float        @default(0)
+  totalAmount    Float
+  reason         String?
+  status         String       @default("DRAFT") // DRAFT | APPROVED | CANCELLED
+  notes          String?
+  createdByName  String?
+  createdById    String?
+  approvedByName String?
+  approvedById   String?
+  approvedAt     DateTime?
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
 }
 
 model Receipt {

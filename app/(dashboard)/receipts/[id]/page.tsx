@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
-import { getReceipt, approveReceipt, unapproveReceipt, cancelReceipt } from "@/actions/receipts";
+import { getReceipt, approveReceipt, unapproveReceipt, cancelReceipt, deleteReceipt } from "@/actions/receipts";
 import { formatDate, formatCurrency } from "@/lib/utils";
 import Link from "next/link";
 
@@ -67,6 +67,19 @@ export default function ReceiptDetailPage() {
     router.push("/receipts");
   }
 
+  async function handleDelete() {
+    if (!confirm("ยืนยันการลบการตัดชำระนี้? ไม่สามารถกู้คืนได้")) return;
+    setLoading(true);
+    setError("");
+    try {
+      await deleteReceipt(receipt!.id);
+      router.push("/receipts");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "เกิดข้อผิดพลาด");
+      setLoading(false);
+    }
+  }
+
   return (
     <div className="max-w-3xl">
       <div className="flex items-center gap-3 mb-6">
@@ -106,6 +119,11 @@ export default function ReceiptDetailPage() {
         {(receipt.status === "DRAFT" || receipt.status === "APPROVED") && (
           <button onClick={handleCancel} disabled={loading} className="border border-red-300 text-red-600 px-4 py-2 rounded-lg text-sm font-medium hover:bg-red-50 disabled:opacity-50 transition-colors">
             ยกเลิก
+          </button>
+        )}
+        {receipt.status === "DRAFT" && (
+          <button onClick={handleDelete} disabled={loading} className="border border-red-400 text-red-700 bg-red-50 px-4 py-2 rounded-lg text-sm font-medium hover:bg-red-100 disabled:opacity-50 transition-colors">
+            🗑️ ลบ
           </button>
         )}
         <a

@@ -10,6 +10,7 @@ const HEADERS: [string, string][] = [
   ["contactPerson", "ผู้ติดต่อ"],
   ["phone", "โทรศัพท์"],
   ["email", "อีเมล"],
+  ["creditDays", "เครดิต(วัน)"],
   ["isActive", "ใช้งานอยู่"],
 ];
 

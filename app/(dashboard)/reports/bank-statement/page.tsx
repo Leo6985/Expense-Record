@@ -45,8 +45,8 @@ export default function BankStatementPage() {
 
   function handleDownloadCSV() {
     if (!result || result.entries.length === 0) return;
-    const headers = ["วันที่", "เลขที่เอกสาร", "ประเภท", "รายการ", "วิธีชำระ", "เลขอ้างอิง", "หัก ณ ที่จ่าย", "เงินเข้า", "เงินออก", "ยอดสะสม"];
-    let running = 0;
+    const headers = ["วันที่", "เลขที่เอกสาร", "ประเภท", "รายการ", "วิธีชำระ", "เลขอ้างอิง", "หัก ณ ที่จ่าย", "เงินเข้า", "เงินออก", "ยอดคงเหลือ"];
+    let running = result.account?.openingBalance ?? 0;
     const rows = result.entries.map((e) => {
       running += e.type === "IN" ? e.amount : -e.amount;
       return [
@@ -67,7 +67,7 @@ export default function BankStatementPage() {
     downloadCSV(`Statement_${name}.csv`, headers, rows);
   }
 
-  let runningTotal = 0;
+  let runningTotal = result?.account?.openingBalance ?? 0;
 
   return (
     <div>
@@ -152,7 +152,11 @@ export default function BankStatementPage() {
           )}
 
           {/* Summary */}
-          <div className="grid grid-cols-4 gap-4 mb-5">
+          <div className="grid grid-cols-5 gap-4 mb-5">
+            <div className="bg-gray-50 border border-gray-200 rounded-xl p-4 text-center">
+              <div className="text-xs text-gray-500 mb-1">ยอดยกมา</div>
+              <div className="text-xl font-bold text-gray-700">฿{formatCurrency(result.account?.openingBalance ?? 0)}</div>
+            </div>
             <div className="bg-blue-50 border border-blue-100 rounded-xl p-4 text-center">
               <div className="text-xs text-blue-600 mb-1">จำนวนรายการ</div>
               <div className="text-2xl font-bold text-blue-700">{result.entries.length}</div>
@@ -188,7 +192,7 @@ export default function BankStatementPage() {
                     <th className="text-right py-2.5 px-4 font-medium text-gray-600">หัก ณ ที่จ่าย</th>
                     <th className="text-right py-2.5 px-4 font-medium text-gray-600 text-green-600">เงินเข้า</th>
                     <th className="text-right py-2.5 px-4 font-medium text-gray-600 text-red-600">เงินออก</th>
-                    <th className="text-right py-2.5 px-4 font-medium text-gray-600">ยอดสะสม</th>
+                    <th className="text-right py-2.5 px-4 font-medium text-gray-600">ยอดคงเหลือ</th>
                   </tr>
                 </thead>
                 <tbody>

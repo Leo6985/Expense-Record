@@ -17,6 +17,7 @@ import {
   SALES_INVOICE_TAB_NAME, SALES_INVOICE_COLUMNS,
   RECEIPT_TAB_NAME, RECEIPT_COLUMNS,
   RECEIPT_ITEM_TAB_NAME, RECEIPT_ITEM_COLUMNS,
+  DEBIT_CREDIT_NOTE_TAB_NAME, DEBIT_CREDIT_NOTE_COLUMNS,
 } from "../lib/sheets-tables";
 
 process.loadEnvFile(".env.local");
@@ -40,6 +41,7 @@ async function main() {
     [SALES_INVOICE_TAB_NAME, SALES_INVOICE_COLUMNS],
     [RECEIPT_TAB_NAME, RECEIPT_COLUMNS],
     [RECEIPT_ITEM_TAB_NAME, RECEIPT_ITEM_COLUMNS],
+    [DEBIT_CREDIT_NOTE_TAB_NAME, DEBIT_CREDIT_NOTE_COLUMNS],
   ] as const) {
     await ensureTab(tabName, columns);
     console.log(`สร้าง/อัปเดตแถวหัวตารางของ tab "${tabName}" เรียบร้อย`);

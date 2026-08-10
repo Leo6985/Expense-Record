@@ -16,6 +16,7 @@ export async function GET() {
   const invoices = await getSalesInvoices();
   const rows = invoices.map((inv) => ({
     "วันที่ใบกำกับภาษี": inv.invoiceDate.toISOString().slice(0, 10),
+    "กำหนดชำระ": inv.dueDate.toISOString().slice(0, 10),
     "เลขที่ใบกำกับภาษี": inv.invoiceNumber,
     "รายชื่อลูกค้า": inv.customer.name,
     "ยอดก่อนภาษี": inv.amount,

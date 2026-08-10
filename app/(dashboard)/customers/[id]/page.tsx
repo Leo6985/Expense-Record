@@ -14,6 +14,7 @@ type Customer = {
   contactPerson: string | null;
   phone: string | null;
   email: string | null;
+  creditDays: number;
   isActive: boolean;
 };
 
@@ -39,6 +40,8 @@ export default function CustomerDetailPage() {
     setSuccess(false);
 
     const form = new FormData(e.currentTarget);
+    const creditDaysRaw = parseInt(form.get("creditDays") as string);
+    const creditDays = Number.isNaN(creditDaysRaw) ? 30 : creditDaysRaw;
 
     try {
       await updateCustomer(params.id as string, {
@@ -49,6 +52,7 @@ export default function CustomerDetailPage() {
         contactPerson: (form.get("contactPerson") as string) || undefined,
         phone: (form.get("phone") as string) || undefined,
         email: (form.get("email") as string) || undefined,
+        creditDays,
         isActive: form.get("isActive") === "true",
       });
       setSuccess(true);
@@ -72,6 +76,7 @@ export default function CustomerDetailPage() {
             <Field label="รหัสลูกค้า *" name="code" required defaultValue={customer.code} />
             <Field label="ชื่อลูกค้า *" name="name" required defaultValue={customer.name} />
             <Field label="เลขประจำตัวผู้เสียภาษี" name="taxId" defaultValue={customer.taxId ?? ""} />
+            <Field label="เครดิต (วัน)" name="creditDays" type="number" defaultValue={String(customer.creditDays)} />
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">สถานะ</label>
               <select

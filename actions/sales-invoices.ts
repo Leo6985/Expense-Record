@@ -5,8 +5,15 @@ import { Prisma } from "@prisma/client";
 import { revalidatePath } from "next/cache";
 import { findOrCreateCustomerByName } from "./customers";
 import { salesInvoicesTable, SalesInvoiceRecord } from "@/lib/sheets-tables";
+import { getEffectiveInvoiceTotal } from "@/lib/sales-invoice-reconciliation";
 
 const AMOUNT_TOLERANCE = 0.01;
+
+function computeDueDate(invoiceDate: Date, creditDays: number): Date {
+  const due = new Date(invoiceDate);
+  due.setDate(due.getDate() + creditDays);
+  return due;
+}
 
 /**
  * Postgres remains authoritative (ReceiptItem.invoiceId still holds a real FK into this
@@ -18,6 +25,7 @@ export async function syncInvoiceToSheet(invoice: {
   id: string;
   invoiceNumber: string;
   invoiceDate: Date;
+  dueDate: Date;
   customerId: string;
   amount: number;
   vatAmount: number;
@@ -51,19 +59,21 @@ export async function syncInvoicesToSheetById(invoiceIds: string[]) {
   }
 }
 
-// Sums how much of an invoice's totalAmount has been committed to non-cancelled receipts,
-// and reconciles invoice.status against it. Called after any receipt create/edit/approve/
-// unapprove/cancel so partially-settled invoices stay selectable for the remaining balance.
+// Sums how much of an invoice's effective total (totalAmount adjusted by any APPROVED debit/
+// credit notes) has been committed to non-cancelled receipts, and reconciles invoice.status
+// against it. Called after any receipt or debit/credit note create/edit/approve/unapprove/
+// cancel so partially-settled invoices stay selectable for the remaining balance.
 export async function syncInvoiceStatus(tx: Prisma.TransactionClient, invoiceId: string) {
   const invoice = await tx.salesInvoice.findUniqueOrThrow({
     where: { id: invoiceId },
-    include: { receiptItems: { include: { receipt: true } } },
+    include: { receiptItems: { include: { receipt: true } }, debitCreditNotes: true },
   });
   if (invoice.status === "CANCELLED") return;
 
+  const effectiveTotal = getEffectiveInvoiceTotal(invoice);
   const activeItems = invoice.receiptItems.filter((item) => item.receipt.status !== "CANCELLED");
   const consumed = activeItems.reduce((s, item) => s + item.amount, 0);
-  const remaining = invoice.totalAmount - consumed;
+  const remaining = effectiveTotal - consumed;
   const allSettled = activeItems.length > 0 && activeItems.every((item) => item.receipt.status === "APPROVED");
 
   let newStatus = invoice.status;
@@ -100,6 +110,7 @@ export async function getSalesInvoiceById(id: string) {
     include: {
       customer: true,
       receiptItems: { include: { receipt: { include: { companyBankAccount: true } } } },
+      debitCreditNotes: { orderBy: { noteDate: "asc" } },
     },
   });
 }
@@ -113,6 +124,7 @@ export async function getAvailableInvoicesForReceipt(excludeReceiptId?: string) 
     include: {
       customer: { select: { name: true } },
       receiptItems: { include: { receipt: { select: { status: true } } } },
+      debitCreditNotes: true,
     },
     orderBy: { invoiceDate: "asc" },
   });
@@ -122,7 +134,7 @@ export async function getAvailableInvoicesForReceipt(excludeReceiptId?: string) 
       const consumed = invoice.receiptItems
         .filter((item) => item.receipt.status !== "CANCELLED" && item.receiptId !== excludeReceiptId)
         .reduce((s, item) => s + item.amount, 0);
-      const remainingAmount = Math.max(0, Math.round((invoice.totalAmount - consumed) * 100) / 100);
+      const remainingAmount = Math.max(0, Math.round((getEffectiveInvoiceTotal(invoice) - consumed) * 100) / 100);
       return { ...invoice, remainingAmount };
     })
     .filter((invoice) => invoice.remainingAmount > AMOUNT_TOLERANCE);
@@ -190,6 +202,8 @@ export async function importSalesInvoicesCSV(rows: ImportRow[]) {
         include: { receiptItems: { include: { receipt: true } } },
       });
 
+      const dueDate = computeDueDate(invoiceDate, customer.creditDays);
+
       if (existing) {
         const hasActiveReceipt = existing.receiptItems.some((item) => item.receipt.status !== "CANCELLED");
         if (hasActiveReceipt) {
@@ -197,7 +211,7 @@ export async function importSalesInvoicesCSV(rows: ImportRow[]) {
           errors.push(`เลขที่ใบกำกับภาษี ${row.invoiceNumber}: มีการตัดชำระแล้ว ข้ามการอัปเดต`);
           continue;
         }
-        const data = { invoiceDate, customerId: customer.id, amount, vatAmount, totalAmount };
+        const data = { invoiceDate, dueDate, customerId: customer.id, amount, vatAmount, totalAmount };
         await prisma.salesInvoice.update({ where: { id: existing.id }, data });
         updated++;
         toUpdateInSheet.push({ id: existing.id, data });
@@ -206,6 +220,7 @@ export async function importSalesInvoicesCSV(rows: ImportRow[]) {
           data: {
             invoiceNumber: row.invoiceNumber,
             invoiceDate,
+            dueDate,
             customerId: customer.id,
             amount,
             vatAmount,

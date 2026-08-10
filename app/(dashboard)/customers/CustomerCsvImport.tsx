@@ -12,11 +12,12 @@ type CustomerRow = {
   contactPerson?: string;
   phone?: string;
   email?: string;
+  creditDays?: number;
 };
 
 type ImportResult = { created: number; updated: number; errors: string[] };
 
-const HEADERS = ["code", "name", "taxId", "address", "contactPerson", "phone", "email"];
+const HEADERS = ["code", "name", "taxId", "address", "contactPerson", "phone", "email", "creditDays"];
 
 const THAI_LABEL_TO_KEY: Record<string, string> = {
   "รหัส": "code",
@@ -26,6 +27,7 @@ const THAI_LABEL_TO_KEY: Record<string, string> = {
   "ผู้ติดต่อ": "contactPerson",
   "โทรศัพท์": "phone",
   "อีเมล": "email",
+  "เครดิต(วัน)": "creditDays",
 };
 
 function normalizeKey(header: string): string | undefined {
@@ -49,6 +51,10 @@ function rowsFromObjects(objects: Record<string, unknown>[]): CustomerRow[] {
       contactPerson: mapped["contactPerson"] || undefined,
       phone: mapped["phone"] || undefined,
       email: mapped["email"] || undefined,
+      creditDays:
+        mapped["creditDays"] !== undefined && mapped["creditDays"] !== "" && !Number.isNaN(parseInt(mapped["creditDays"]))
+          ? parseInt(mapped["creditDays"])
+          : undefined,
     };
   });
 }

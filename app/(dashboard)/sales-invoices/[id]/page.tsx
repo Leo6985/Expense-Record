@@ -19,6 +19,11 @@ const receiptStatusConfig: Record<string, { label: string; color: string }> = {
   CANCELLED: { label: "ยกเลิก", color: "bg-red-100 text-red-700" },
 };
 
+const noteTypeConfig: Record<string, { label: string; color: string }> = {
+  DEBIT: { label: "เพิ่มหนี้", color: "bg-orange-100 text-orange-700" },
+  CREDIT: { label: "ลดหนี้", color: "bg-teal-100 text-teal-700" },
+};
+
 type Invoice = Awaited<ReturnType<typeof getSalesInvoiceById>>;
 
 export default function SalesInvoiceDetailPage() {
@@ -35,6 +40,11 @@ export default function SalesInvoiceDetailPage() {
 
   const s = statusConfig[invoice.status] ?? { label: invoice.status, color: "bg-gray-100 text-gray-700" };
   const canCancel = invoice.status === "PENDING";
+  const isOverdue = (invoice.status === "PENDING" || invoice.status === "PARTIALLY_RECEIVED") && new Date(invoice.dueDate) < new Date();
+  const noteAdjustment = invoice.debitCreditNotes
+    .filter((n) => n.status === "APPROVED")
+    .reduce((s, n) => s + (n.type === "DEBIT" ? n.totalAmount : -n.totalAmount), 0);
+  const effectiveTotal = Math.round((invoice.totalAmount + noteAdjustment) * 100) / 100;
 
   async function handleCancel() {
     if (!confirm("ยืนยันการยกเลิกใบกำกับภาษีขายนี้?")) return;
@@ -54,7 +64,9 @@ export default function SalesInvoiceDetailPage() {
       <div className="flex items-center gap-3 mb-6">
         <Link href="/sales-invoices" className="text-gray-400 hover:text-gray-600">← กลับ</Link>
         <h1 className="text-2xl font-bold text-gray-900 font-mono">{invoice.invoiceNumber}</h1>
-        <span className={`inline-flex px-2.5 py-0.5 rounded-full text-xs font-medium ${s.color}`}>{s.label}</span>
+        <span className={`inline-flex px-2.5 py-0.5 rounded-full text-xs font-medium ${isOverdue ? "bg-red-100 text-red-700" : s.color}`}>
+          {isOverdue ? "เกินกำหนด" : s.label}
+        </span>
       </div>
 
       {error && (
@@ -78,6 +90,7 @@ export default function SalesInvoiceDetailPage() {
         <div className="grid grid-cols-2 gap-4 text-sm">
           <InfoRow label="ลูกค้า" value={invoice.customer.name} />
           <InfoRow label="วันที่ใบกำกับภาษี" value={formatDate(invoice.invoiceDate)} />
+          <InfoRow label="กำหนดชำระ" value={formatDate(invoice.dueDate)} highlight={isOverdue} />
           {invoice.notes && <InfoRow label="หมายเหตุ" value={invoice.notes} />}
         </div>
       </div>
@@ -97,7 +110,54 @@ export default function SalesInvoiceDetailPage() {
             <span>รวมทั้งสิ้น</span>
             <span className="text-blue-700">฿{formatCurrency(invoice.totalAmount)}</span>
           </div>
+          {noteAdjustment !== 0 && (
+            <>
+              <div className="flex justify-between text-gray-600">
+                <span>ปรับปรุงจากใบเพิ่ม/ลดหนี้ (อนุมัติแล้ว)</span>
+                <span className={noteAdjustment > 0 ? "text-orange-600" : "text-teal-600"}>
+                  {noteAdjustment > 0 ? "+" : ""}฿{formatCurrency(noteAdjustment)}
+                </span>
+              </div>
+              <div className="flex justify-between font-bold text-lg border-t border-gray-100 pt-2">
+                <span>ยอดสุทธิที่ต้องชำระ</span>
+                <span className="text-blue-700">฿{formatCurrency(effectiveTotal)}</span>
+              </div>
+            </>
+          )}
         </div>
+      </div>
+
+      <div className="bg-white rounded-xl border border-gray-200 p-5 mb-5">
+        <div className="flex items-center justify-between mb-4 pb-2 border-b border-gray-100">
+          <h2 className="font-semibold text-gray-900">ใบเพิ่ม/ลดหนี้</h2>
+          <div className="flex gap-3 text-sm">
+            <Link href={`/debit-credit-notes/new?type=DEBIT`} className="text-orange-600 hover:underline">+ ใบเพิ่มหนี้</Link>
+            <Link href={`/debit-credit-notes/new?type=CREDIT`} className="text-teal-600 hover:underline">+ ใบลดหนี้</Link>
+          </div>
+        </div>
+        {invoice.debitCreditNotes.length === 0 ? (
+          <p className="text-gray-400 text-sm text-center py-4">ยังไม่มีใบเพิ่ม/ลดหนี้</p>
+        ) : (
+          <div className="space-y-2">
+            {invoice.debitCreditNotes.map((n) => {
+              const nt = noteTypeConfig[n.type] ?? { label: n.type, color: "bg-gray-100 text-gray-700" };
+              const ns = receiptStatusConfig[n.status] ?? { label: n.status, color: "bg-gray-100 text-gray-700" };
+              return (
+                <div key={n.id} className="flex items-center justify-between text-sm border-b border-gray-50 pb-2 last:border-0 last:pb-0">
+                  <div>
+                    <Link href={`/debit-credit-notes/${n.id}`} className="font-mono text-blue-700 hover:underline">
+                      {n.noteNumber}
+                    </Link>
+                    <span className={`inline-flex ml-2 px-2 py-0.5 rounded-full text-xs font-medium ${nt.color}`}>{nt.label}</span>
+                    <span className={`inline-flex ml-1 px-2 py-0.5 rounded-full text-xs font-medium ${ns.color}`}>{ns.label}</span>
+                    <span className="text-gray-400 ml-2">{formatDate(n.noteDate)}</span>
+                  </div>
+                  <span className="font-medium">฿{formatCurrency(n.totalAmount)}</span>
+                </div>
+              );
+            })}
+          </div>
+        )}
       </div>
 
       <div className="bg-white rounded-xl border border-gray-200 p-5">

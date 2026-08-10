@@ -103,6 +103,7 @@ export type CompanyBankAccountRecord = {
   branch: string | null;
   accountNo: string;
   accountName: string;
+  openingBalance: number;
   isActive: boolean;
   createdAt: Date;
 };
@@ -115,6 +116,7 @@ export const COMPANY_BANK_ACCOUNT_COLUMNS: ColumnDef[] = [
   { key: "branch", type: "string" },
   { key: "accountNo", type: "string" },
   { key: "accountName", type: "string" },
+  { key: "openingBalance", type: "number" },
   { key: "isActive", type: "boolean" },
   { key: "createdAt", type: "date" },
 ];
@@ -448,6 +450,7 @@ export type CustomerRecord = {
   contactPerson: string | null;
   phone: string | null;
   email: string | null;
+  creditDays: number;
   isActive: boolean;
   createdAt: Date;
   updatedAt: Date;
@@ -464,6 +467,7 @@ export const CUSTOMER_COLUMNS: ColumnDef[] = [
   { key: "contactPerson", type: "string" },
   { key: "phone", type: "string" },
   { key: "email", type: "string" },
+  { key: "creditDays", type: "number" },
   { key: "isActive", type: "boolean" },
   { key: "createdAt", type: "date" },
   { key: "updatedAt", type: "date" },
@@ -475,6 +479,7 @@ export type SalesInvoiceRecord = {
   id: string;
   invoiceNumber: string;
   invoiceDate: Date;
+  dueDate: Date;
   customerId: string;
   amount: number;
   vatAmount: number;
@@ -493,6 +498,7 @@ export const SALES_INVOICE_COLUMNS: ColumnDef[] = [
   { key: "id", type: "string" },
   { key: "invoiceNumber", type: "string" },
   { key: "invoiceDate", type: "date" },
+  { key: "dueDate", type: "date" },
   { key: "customerId", type: "string" },
   { key: "amount", type: "number" },
   { key: "vatAmount", type: "number" },
@@ -583,4 +589,53 @@ export const RECEIPT_ITEM_COLUMNS: ColumnDef[] = [
 export const receiptItemsTable = new SheetTable<ReceiptItemRecord>(
   RECEIPT_ITEM_TAB_NAME,
   RECEIPT_ITEM_COLUMNS
+);
+
+export type DebitCreditNoteRecord = {
+  id: string;
+  noteNumber: string;
+  type: string;
+  noteDate: Date;
+  invoiceId: string;
+  amount: number;
+  vatAmount: number;
+  totalAmount: number;
+  reason: string | null;
+  status: string;
+  notes: string | null;
+  createdByName: string | null;
+  createdById: string | null;
+  approvedByName: string | null;
+  approvedById: string | null;
+  approvedAt: Date | null;
+  createdAt: Date;
+  updatedAt: Date;
+};
+
+export const DEBIT_CREDIT_NOTE_TAB_NAME = "DebitCreditNotes";
+
+export const DEBIT_CREDIT_NOTE_COLUMNS: ColumnDef[] = [
+  { key: "id", type: "string" },
+  { key: "noteNumber", type: "string" },
+  { key: "type", type: "string" },
+  { key: "noteDate", type: "date" },
+  { key: "invoiceId", type: "string" },
+  { key: "amount", type: "number" },
+  { key: "vatAmount", type: "number" },
+  { key: "totalAmount", type: "number" },
+  { key: "reason", type: "string" },
+  { key: "status", type: "string" },
+  { key: "notes", type: "string" },
+  { key: "createdByName", type: "string" },
+  { key: "createdById", type: "string" },
+  { key: "approvedByName", type: "string" },
+  { key: "approvedById", type: "string" },
+  { key: "approvedAt", type: "date" },
+  { key: "createdAt", type: "date" },
+  { key: "updatedAt", type: "date" },
+];
+
+export const debitCreditNotesTable = new SheetTable<DebitCreditNoteRecord>(
+  DEBIT_CREDIT_NOTE_TAB_NAME,
+  DEBIT_CREDIT_NOTE_COLUMNS
 );

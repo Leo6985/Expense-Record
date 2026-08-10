@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { revalidatePath } from "next/cache";
 import { auth } from "@/auth";
 import { syncInvoiceStatus, syncInvoicesToSheetById } from "./sales-invoices";
+import { getEffectiveInvoiceTotal } from "@/lib/sales-invoice-reconciliation";
 import { receiptsTable, receiptItemsTable, ReceiptRecord, ReceiptItemRecord } from "@/lib/sheets-tables";
 
 const AMOUNT_TOLERANCE = 0.01;
@@ -98,7 +99,7 @@ type ReceiptItemInput = { invoiceId: string; amount: number };
 async function buildReceiptItems(items: ReceiptItemInput[], excludeReceiptId?: string) {
   const invoices = await prisma.salesInvoice.findMany({
     where: { id: { in: items.map((i) => i.invoiceId) } },
-    include: { receiptItems: { include: { receipt: true } } },
+    include: { receiptItems: { include: { receipt: true } }, debitCreditNotes: true },
   });
 
   return items.map((di) => {
@@ -109,7 +110,7 @@ async function buildReceiptItems(items: ReceiptItemInput[], excludeReceiptId?: s
     const consumedByOthers = invoice.receiptItems
       .filter((item) => item.receipt.status !== "CANCELLED" && item.receiptId !== excludeReceiptId)
       .reduce((s, item) => s + item.amount, 0);
-    const remaining = invoice.totalAmount - consumedByOthers;
+    const remaining = getEffectiveInvoiceTotal(invoice) - consumedByOthers;
     if (di.amount > remaining + AMOUNT_TOLERANCE) {
       throw new Error(
         `จำนวนเงินสำหรับ ${invoice.invoiceNumber} (${di.amount}) เกินยอดคงเหลือ (${Math.round(remaining * 100) / 100})`
@@ -313,6 +314,33 @@ export async function cancelReceipt(id: string) {
 
   revalidatePath("/receipts");
   revalidatePath(`/receipts/${id}`);
+  revalidatePath("/sales-invoices");
+}
+
+// Hard-deletes a receipt that was never approved — unlike cancelReceipt (which keeps the
+// record as an audit trail with status CANCELLED), this removes it entirely. Only safe while
+// DRAFT since APPROVED receipts represent a confirmed accounting event.
+export async function deleteReceipt(id: string) {
+  const existing = await prisma.receipt.findUnique({ where: { id }, include: { items: true } });
+  if (!existing) return;
+  if (existing.status !== "DRAFT") throw new Error("ลบได้เฉพาะรายการที่ยังไม่อนุมัติเท่านั้น");
+
+  const invoiceIds = existing.items.map((item) => item.invoiceId);
+
+  await prisma.$transaction(async (tx) => {
+    await tx.receipt.delete({ where: { id } });
+    for (const invoiceId of invoiceIds) await syncInvoiceStatus(tx, invoiceId);
+  });
+
+  try {
+    await receiptItemsTable.deleteWhere((r) => r.receiptId === id);
+    await receiptsTable.delete(id);
+  } catch (err) {
+    console.error("Sheet cleanup failed after deleteReceipt:", err);
+  }
+  await syncInvoicesToSheetById(invoiceIds);
+
+  revalidatePath("/receipts");
   revalidatePath("/sales-invoices");
 }
 

@@ -19,6 +19,7 @@ async function syncCustomerToSheet(customer: {
   contactPerson: string | null;
   phone: string | null;
   email: string | null;
+  creditDays: number;
   isActive: boolean;
   createdAt: Date;
   updatedAt: Date;
@@ -62,6 +63,7 @@ export async function createCustomer(data: {
   contactPerson?: string;
   phone?: string;
   email?: string;
+  creditDays?: number;
 }) {
   const existing = await prisma.customer.findUnique({ where: { code: data.code } });
   if (existing) throw new Error(`รหัสลูกค้า ${data.code} มีในระบบแล้ว`);
@@ -87,6 +89,7 @@ export async function updateCustomer(
     contactPerson?: string;
     phone?: string;
     email?: string;
+    creditDays?: number;
     isActive?: boolean;
   }
 ) {
@@ -135,6 +138,7 @@ export async function importCustomersCSV(
     contactPerson?: string;
     phone?: string;
     email?: string;
+    creditDays?: number;
   }[]
 ) {
   let created = 0;
@@ -158,6 +162,7 @@ export async function importCustomersCSV(
           contactPerson: row.contactPerson || null,
           phone: row.phone || null,
           email: row.email || null,
+          creditDays: row.creditDays ?? existing.creditDays,
         };
         await prisma.customer.update({ where: { code: row.code }, data });
         updated++;
@@ -172,6 +177,7 @@ export async function importCustomersCSV(
             contactPerson: row.contactPerson || null,
             phone: row.phone || null,
             email: row.email || null,
+            creditDays: row.creditDays ?? 30,
           },
         });
         created++;
