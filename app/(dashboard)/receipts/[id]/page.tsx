@@ -108,6 +108,14 @@ export default function ReceiptDetailPage() {
             ยกเลิก
           </button>
         )}
+        <a
+          href={`/receipts/${params.id}/voucher`}
+          target="_blank"
+          rel="noreferrer"
+          className="border border-gray-300 text-gray-700 px-4 py-2 rounded-lg text-sm font-medium hover:bg-gray-50 transition-colors ml-auto"
+        >
+          🧾 ใบสำคัญรับ
+        </a>
       </div>
 
       <div className="bg-white rounded-xl border border-gray-200 p-5 mb-5">

@@ -496,3 +496,152 @@ export function exportWHTCertificatePDF(paymentNumber: string, certs: WHTCertifi
 
   doc.save(`WHT_${paymentNumber}.pdf`);
 }
+
+export type ReceiptVoucherData = {
+  receiptNumber: string;
+  receiptDate: Date | string;
+  recordedDate: Date | string;
+  paymentMethod: string;
+  referenceNumber?: string | null;
+  companyBankAccount: { bankName: string; accountNo: string; accountName: string };
+  feeAmount: number;
+  withholdingTaxAmount: number;
+  withholdingTaxCertNumber?: string | null;
+  actualReceivedAmount: number;
+  shortageOrExcessAmount: number;
+  createdByName?: string | null;
+  approvedByName?: string | null;
+  notes?: string | null;
+  items: { invoiceNumber: string; customerName: string; amount: number }[];
+};
+
+/** Real PDF (not window.print()), Sarabun-embedded like the WHT certificate so Thai
+ * text actually renders — see registerThaiFont's note on jsPDF's built-in fonts. */
+export function exportReceiptVoucherPDF(data: ReceiptVoucherData) {
+  const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
+  registerThaiFont(doc);
+  doc.setLineHeightFactor(1.5);
+  patchThaiMarkStacking(doc);
+
+  const left = 15;
+  const right = 195;
+  const width = right - left;
+  let y = 18;
+
+  doc.setFont("Sarabun", "normal");
+  doc.setFontSize(9);
+  doc.text(COMPANY.name, left, y);
+  y += 4.5;
+  doc.text(COMPANY.address, left, y);
+  y += 4.5;
+  doc.text(`เลขประจำตัวผู้เสียภาษี ${COMPANY.taxId}`, left, y);
+
+  doc.setFont("Sarabun", "bold");
+  doc.setFontSize(17);
+  doc.text("ใบสำคัญรับ", right, 20, { align: "right" });
+  doc.setFontSize(9);
+  doc.text("RECEIPT VOUCHER", right, 25, { align: "right" });
+  doc.setFont("Sarabun", "normal");
+  doc.setFontSize(9.5);
+  doc.text(`เลขที่ ${data.receiptNumber}`, right, 30, { align: "right" });
+
+  y = 35;
+  doc.setLineWidth(0.5);
+  doc.line(left, y, right, y);
+  y += 6;
+
+  const customerNames = Array.from(new Set(data.items.map((i) => i.customerName))).join(", ");
+  doc.setFontSize(10);
+  doc.setFont("Sarabun", "bold");
+  doc.text("ได้รับเงินจาก", left, y);
+  doc.setFont("Sarabun", "normal");
+  doc.text(customerNames, left + 25, y);
+  doc.text(`วันที่รับชำระ ${formatDateStr(data.receiptDate)}`, right, y, { align: "right" });
+  y += 6;
+  doc.text(`วันที่บันทึกข้อมูล ${formatDateStr(data.recordedDate)}`, right, y, { align: "right" });
+  y += 4;
+
+  autoTable(doc, {
+    startY: y,
+    margin: { left, right: 15 },
+    head: [["เลขที่ใบกำกับภาษี", "ลูกค้า", "จำนวนเงิน"]],
+    body: data.items.map((item) => [item.invoiceNumber, item.customerName, formatNum(item.amount)]),
+    styles: { font: "Sarabun", fontSize: 9, cellPadding: 2.5 },
+    headStyles: { fillColor: [30, 64, 175], textColor: 255, fontStyle: "normal" },
+    columnStyles: { 2: { halign: "right" } },
+  });
+
+  y = (doc as jsPDF & { lastAutoTable: { finalY: number } }).lastAutoTable.finalY + 6;
+
+  const totalAmount = data.items.reduce((s, i) => s + i.amount, 0);
+  const netExpected = totalAmount - data.feeAmount - data.withholdingTaxAmount;
+
+  const summaryLine = (label: string, value: string, bold = false) => {
+    doc.setFont("Sarabun", bold ? "bold" : "normal");
+    doc.setFontSize(bold ? 10.5 : 9.5);
+    doc.text(label, right - 70, y);
+    doc.text(value, right, y, { align: "right" });
+    y += bold ? 6 : 5;
+  };
+
+  summaryLine("ยอดรับชำระรวม", `฿${formatNum(totalAmount)}`);
+  summaryLine("หัก ค่าธรรมเนียม", `฿${formatNum(data.feeAmount)}`);
+  summaryLine(
+    `หัก ภาษีหัก ณ ที่จ่าย${data.withholdingTaxCertNumber ? ` (เลขที่ใบหัก ${data.withholdingTaxCertNumber})` : ""}`,
+    `฿${formatNum(data.withholdingTaxAmount)}`
+  );
+  doc.setLineWidth(0.3);
+  doc.line(right - 70, y - 3, right, y - 3);
+  summaryLine("ยอดสุทธิที่คาดว่าจะได้รับ", `฿${formatNum(netExpected)}`);
+  summaryLine("ยอดรับจริง", `฿${formatNum(data.actualReceivedAmount)}`, true);
+  if (data.shortageOrExcessAmount !== 0) {
+    summaryLine(
+      data.shortageOrExcessAmount > 0 ? "เงินเกิน" : "เงินขาด",
+      `฿${formatNum(Math.abs(data.shortageOrExcessAmount))}`,
+      true
+    );
+  }
+
+  y += 3;
+  doc.setLineWidth(0.5);
+  doc.line(left, y, right, y);
+  y += 6;
+
+  doc.setFontSize(9.5);
+  doc.setFont("Sarabun", "bold");
+  doc.text("จำนวนเงิน (ตัวอักษร)", left, y);
+  doc.setFont("Sarabun", "normal");
+  doc.text(numberToThaiBahtText(data.actualReceivedAmount), left + 32, y);
+  y += 8;
+
+  doc.setFont("Sarabun", "bold");
+  doc.text("ข้อมูลการรับเงิน", left, y);
+  y += 5.5;
+  doc.setFont("Sarabun", "normal");
+  doc.setFontSize(9);
+  doc.text(`วิธีการรับชำระ: ${data.paymentMethod}`, left, y);
+  y += 5;
+  doc.text(
+    `บัญชีที่รับเงิน: ${data.companyBankAccount.bankName} ${data.companyBankAccount.accountNo} ${data.companyBankAccount.accountName}`,
+    left,
+    y
+  );
+  if (data.referenceNumber) {
+    y += 5;
+    doc.text(`เลขที่อ้างอิง: ${data.referenceNumber}`, left, y);
+  }
+  if (data.notes) {
+    y += 5;
+    doc.text(`หมายเหตุ: ${data.notes}`, left, y);
+  }
+
+  y += 20;
+  doc.setFontSize(9);
+  doc.text(`ผู้จัดทำ: ${data.createdByName ? data.createdByName : "__________________"}`, left, y);
+  doc.text(`ผู้อนุมัติ: ${data.approvedByName ? data.approvedByName : "__________________"}`, right - 65, y);
+  y += 5;
+  doc.text("วันที่: __________________", left, y);
+  doc.text("วันที่: __________________", right - 65, y);
+
+  doc.save(`RV_${data.receiptNumber}.pdf`);
+}

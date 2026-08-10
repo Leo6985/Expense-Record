@@ -84,6 +84,7 @@ export default function ReceiptForm({
   const [actualReceivedAmount, setActualReceivedAmount] = useState(initialValues?.actualReceivedAmount ?? "");
   const [actualReceivedTouched, setActualReceivedTouched] = useState(!!initialValues);
   const [notes, setNotes] = useState(initialValues?.notes ?? "");
+  const [customerFilter, setCustomerFilter] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
@@ -107,11 +108,18 @@ export default function ReceiptForm({
     setAmounts((prev) => ({ ...prev, [invoiceId]: value }));
   }
 
+  const customerNames = Array.from(new Set(availableInvoices.map((inv) => inv.customer.name))).sort((a, b) =>
+    a.localeCompare(b, "th")
+  );
+  const filteredInvoices = customerFilter
+    ? availableInvoices.filter((inv) => inv.customer.name.toLowerCase().includes(customerFilter.toLowerCase()))
+    : availableInvoices;
+
   function selectAll() {
-    setSelectedIds(availableInvoices.map((inv) => inv.id));
+    setSelectedIds(filteredInvoices.map((inv) => inv.id));
     setAmounts((prev) => {
       const next = { ...prev };
-      for (const inv of availableInvoices) if (!(inv.id in next)) next[inv.id] = String(inv.remainingAmount);
+      for (const inv of filteredInvoices) if (!(inv.id in next)) next[inv.id] = String(inv.remainingAmount);
       return next;
     });
   }
@@ -199,21 +207,21 @@ export default function ReceiptForm({
           <h2 className="font-semibold text-gray-900 mb-4 pb-2 border-b border-gray-100">ข้อมูลทั่วไป</h2>
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">วันที่รับชำระ *</label>
-              <input
-                type="date"
-                value={receiptDate}
-                onChange={(e) => setReceiptDate(e.target.value)}
-                required
-                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-              />
-            </div>
-            <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">วันที่บันทึกข้อมูล *</label>
               <input
                 type="date"
                 value={recordedDate}
                 onChange={(e) => setRecordedDate(e.target.value)}
+                required
+                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">วันที่รับชำระ *</label>
+              <input
+                type="date"
+                value={receiptDate}
+                onChange={(e) => setReceiptDate(e.target.value)}
                 required
                 className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
               />
@@ -267,7 +275,7 @@ export default function ReceiptForm({
         </div>
 
         <div className="bg-white rounded-xl border border-gray-200 p-5">
-          <div className="flex items-center justify-between mb-4 pb-2 border-b border-gray-100">
+          <div className="flex items-center justify-between mb-3 pb-2 border-b border-gray-100">
             <h2 className="font-semibold text-gray-900">เลือกใบกำกับภาษีขายที่จะตัดชำระ</h2>
             <div className="flex gap-2 text-sm">
               <button type="button" onClick={selectAll} className="text-blue-600 hover:underline">เลือกทั้งหมด</button>
@@ -276,11 +284,36 @@ export default function ReceiptForm({
             </div>
           </div>
 
+          <div className="mb-4">
+            <label className="block text-sm font-medium text-gray-700 mb-1">ค้นหาชื่อลูกค้า</label>
+            <div className="flex items-center gap-2">
+              <input
+                list="receipt-customer-names"
+                value={customerFilter}
+                onChange={(e) => setCustomerFilter(e.target.value)}
+                placeholder="พิมพ์หรือเลือกชื่อลูกค้าเพื่อกรองรายการที่ค้างอยู่"
+                className="flex-1 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+              <datalist id="receipt-customer-names">
+                {customerNames.map((name) => (
+                  <option key={name} value={name} />
+                ))}
+              </datalist>
+              {customerFilter && (
+                <button type="button" onClick={() => setCustomerFilter("")} className="text-xs text-gray-500 hover:underline whitespace-nowrap">
+                  ล้างตัวกรอง
+                </button>
+              )}
+            </div>
+          </div>
+
           {availableInvoices.length === 0 ? (
             <p className="text-gray-400 text-sm text-center py-4">ไม่มีใบกำกับภาษีขายที่รอรับชำระ</p>
+          ) : filteredInvoices.length === 0 ? (
+            <p className="text-gray-400 text-sm text-center py-4">ไม่พบใบกำกับภาษีขายที่ค้างอยู่สำหรับลูกค้า &quot;{customerFilter}&quot;</p>
           ) : (
             <div className="space-y-2">
-              {availableInvoices.map((inv) => {
+              {filteredInvoices.map((inv) => {
                 const isSelected = selectedIds.includes(inv.id);
                 const isPartialBalance = inv.remainingAmount < inv.totalAmount - 0.01;
                 return (
