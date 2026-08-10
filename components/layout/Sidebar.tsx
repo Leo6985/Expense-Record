@@ -11,7 +11,7 @@ type MenuGroup = { label: string; items: MenuItem[]; roles: string[] };
 const menuGroups: MenuGroup[] = [
   {
     label: "แผนกจัดซื้อ",
-    roles: ["PURCHASING", "OWNER"],
+    roles: ["PURCHASING", "ACCOUNTING", "OWNER"],
     items: [
       { href: "/purchase-orders", label: "ใบสั่งซื้อ (PO)", icon: "📋" },
       { href: "/goods-receipts", label: "รับสินค้า (GR)", icon: "📦" },

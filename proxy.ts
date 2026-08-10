@@ -3,9 +3,7 @@ import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 
 const PURCHASING_PATHS = ["/purchase-orders", "/goods-receipts", "/products"];
-const ACCOUNTING_PATHS = ["/accounts-payable", "/payment-prep", "/payments", "/company-accounts", "/reports", "/products", "/chart-of-accounts"];
 const OWNER_ONLY_PATHS = ["/users"];
-const ALL_PATHS = ["/", "/vendors"];
 
 // /api/export/<module> should be gated by the same rule as its /<module> page.
 function toPageEquivalent(pathname: string): string {
@@ -24,8 +22,9 @@ function canAccess(pathname: string, role: string | undefined): boolean {
     return PURCHASING_PATHS.some((p) => pathname.startsWith(p));
   }
 
+  // Accounting gets every menu except owner-only ones (e.g. user management).
   if (role === "ACCOUNTING") {
-    return ACCOUNTING_PATHS.some((p) => pathname.startsWith(p));
+    return !OWNER_ONLY_PATHS.some((p) => pathname.startsWith(p));
   }
 
   return false;

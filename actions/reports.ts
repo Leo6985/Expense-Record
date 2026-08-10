@@ -102,12 +102,26 @@ export async function getCompanyBankAccounts() {
   });
 }
 
+export type BankStatementEntry = {
+  id: string;
+  date: Date;
+  documentNumber: string;
+  type: "IN" | "OUT";
+  description: string;
+  paymentMethod: string;
+  referenceNumber: string | null;
+  withholdingTax: number;
+  amount: number;
+  notes: string | null;
+  href: string;
+};
+
 export async function getBankStatementReport(bankAccountId: string, from: string, to: string) {
   const fromDate = new Date(from);
   const toDate = new Date(to);
   toDate.setHours(23, 59, 59, 999);
 
-  const [account, payments] = await Promise.all([
+  const [account, payments, receipts] = await Promise.all([
     prisma.companyBankAccount.findUnique({ where: { id: bankAccountId } }),
     prisma.payment.findMany({
       where: {
@@ -127,7 +141,48 @@ export async function getBankStatementReport(bankAccountId: string, from: string
       },
       orderBy: { paymentDate: "asc" },
     }),
+    prisma.receipt.findMany({
+      where: {
+        companyBankAccountId: bankAccountId,
+        status: { not: "CANCELLED" },
+        receiptDate: { gte: fromDate, lte: toDate },
+      },
+      include: {
+        items: { include: { invoice: { include: { customer: { select: { name: true } } } } } },
+      },
+      orderBy: { receiptDate: "asc" },
+    }),
   ]);
 
-  return { account, payments };
+  const outEntries: BankStatementEntry[] = payments.map((p) => ({
+    id: p.id,
+    date: p.paymentDate,
+    documentNumber: p.paymentNumber,
+    type: "OUT",
+    description: [...new Set(p.prep.items.map((i) => i.ap.vendor.name))].join(", "),
+    paymentMethod: p.paymentMethod,
+    referenceNumber: p.referenceNumber,
+    withholdingTax: p.prep.totalWithholdingTax ?? 0,
+    amount: p.amount,
+    notes: p.notes,
+    href: `/payment-prep/${p.prepId}`,
+  }));
+
+  const inEntries: BankStatementEntry[] = receipts.map((r) => ({
+    id: r.id,
+    date: r.receiptDate,
+    documentNumber: r.receiptNumber,
+    type: "IN",
+    description: [...new Set(r.items.map((i) => i.invoice.customer.name))].join(", "),
+    paymentMethod: r.paymentMethod,
+    referenceNumber: r.referenceNumber,
+    withholdingTax: r.withholdingTaxAmount,
+    amount: r.actualReceivedAmount,
+    notes: r.notes,
+    href: `/receipts/${r.id}`,
+  }));
+
+  const entries = [...outEntries, ...inEntries].sort((a, b) => a.date.getTime() - b.date.getTime());
+
+  return { account, entries };
 }

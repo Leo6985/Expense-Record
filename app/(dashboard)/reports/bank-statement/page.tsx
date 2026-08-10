@@ -8,7 +8,6 @@ import Link from "next/link";
 
 type Account = Awaited<ReturnType<typeof getCompanyBankAccounts>>[number];
 type StatementResult = Awaited<ReturnType<typeof getBankStatementReport>>;
-type Payment = StatementResult["payments"][number];
 
 const PAYMENT_METHOD_LABELS: Record<string, string> = {
   TRANSFER: "โอนเงิน",
@@ -40,25 +39,26 @@ export default function BankStatementPage() {
     setLoading(false);
   }
 
-  const totalPaid = result?.payments.reduce((s, p) => s + p.amount, 0) ?? 0;
-  const totalWHT = result?.payments.reduce((s, p) => s + (p.prep.totalWithholdingTax ?? 0), 0) ?? 0;
+  const totalIn = result?.entries.filter((e) => e.type === "IN").reduce((s, e) => s + e.amount, 0) ?? 0;
+  const totalOut = result?.entries.filter((e) => e.type === "OUT").reduce((s, e) => s + e.amount, 0) ?? 0;
+  const totalWHT = result?.entries.reduce((s, e) => s + e.withholdingTax, 0) ?? 0;
 
   function handleDownloadCSV() {
-    if (!result || result.payments.length === 0) return;
-    const headers = ["วันที่", "เลขที่ชำระ", "รายการ / ผู้รับเงิน", "วิธีชำระ", "เลขอ้างอิง", "หัก ณ ที่จ่าย", "เงินออก", "ยอดสะสม"];
+    if (!result || result.entries.length === 0) return;
+    const headers = ["วันที่", "เลขที่เอกสาร", "ประเภท", "รายการ", "วิธีชำระ", "เลขอ้างอิง", "หัก ณ ที่จ่าย", "เงินเข้า", "เงินออก", "ยอดสะสม"];
     let running = 0;
-    const rows = result.payments.map((p) => {
-      running += p.amount;
-      const vendors = [...new Set(p.prep.items.map((i) => i.ap.vendor.name))].join(", ");
-      const wht = p.prep.totalWithholdingTax ?? 0;
+    const rows = result.entries.map((e) => {
+      running += e.type === "IN" ? e.amount : -e.amount;
       return [
-        formatDate(p.paymentDate),
-        p.paymentNumber,
-        vendors + (p.notes ? ` (${p.notes})` : ""),
-        PAYMENT_METHOD_LABELS[p.paymentMethod] ?? p.paymentMethod,
-        p.referenceNumber ?? "",
-        wht > 0 ? wht : 0,
-        p.amount,
+        formatDate(e.date),
+        e.documentNumber,
+        e.type === "IN" ? "เงินเข้า" : "เงินออก",
+        e.description + (e.notes ? ` (${e.notes})` : ""),
+        PAYMENT_METHOD_LABELS[e.paymentMethod] ?? e.paymentMethod,
+        e.referenceNumber ?? "",
+        e.withholdingTax > 0 ? e.withholdingTax : 0,
+        e.type === "IN" ? e.amount : 0,
+        e.type === "OUT" ? e.amount : 0,
         running,
       ];
     });
@@ -117,7 +117,7 @@ export default function BankStatementPage() {
         >
           {loading ? "กำลังโหลด..." : "ค้นหา"}
         </button>
-        {result && result.payments.length > 0 && (
+        {result && result.entries.length > 0 && (
           <button
             onClick={handleDownloadCSV}
             className="bg-green-700 text-white px-5 py-2 rounded-lg text-sm font-medium hover:bg-green-800 transition-colors"
@@ -152,22 +152,26 @@ export default function BankStatementPage() {
           )}
 
           {/* Summary */}
-          <div className="grid grid-cols-3 gap-4 mb-5">
+          <div className="grid grid-cols-4 gap-4 mb-5">
             <div className="bg-blue-50 border border-blue-100 rounded-xl p-4 text-center">
               <div className="text-xs text-blue-600 mb-1">จำนวนรายการ</div>
-              <div className="text-2xl font-bold text-blue-700">{result.payments.length}</div>
+              <div className="text-2xl font-bold text-blue-700">{result.entries.length}</div>
+            </div>
+            <div className="bg-green-50 border border-green-100 rounded-xl p-4 text-center">
+              <div className="text-xs text-green-600 mb-1">ยอดเงินเข้ารวม</div>
+              <div className="text-xl font-bold text-green-700">฿{formatCurrency(totalIn)}</div>
+            </div>
+            <div className="bg-red-50 border border-red-100 rounded-xl p-4 text-center">
+              <div className="text-xs text-red-600 mb-1">ยอดเงินออกรวม</div>
+              <div className="text-xl font-bold text-red-700">฿{formatCurrency(totalOut)}</div>
             </div>
             <div className="bg-orange-50 border border-orange-100 rounded-xl p-4 text-center">
               <div className="text-xs text-orange-600 mb-1">หัก ณ ที่จ่ายรวม</div>
               <div className="text-xl font-bold text-orange-700">฿{formatCurrency(totalWHT)}</div>
             </div>
-            <div className="bg-red-50 border border-red-100 rounded-xl p-4 text-center">
-              <div className="text-xs text-red-600 mb-1">ยอดเงินออกรวม</div>
-              <div className="text-xl font-bold text-red-700">฿{formatCurrency(totalPaid)}</div>
-            </div>
           </div>
 
-          {result.payments.length === 0 ? (
+          {result.entries.length === 0 ? (
             <div className="text-center text-gray-400 text-sm py-8 bg-white rounded-xl border border-gray-200">
               ไม่พบรายการในช่วงเวลาที่เลือก
             </div>
@@ -177,35 +181,41 @@ export default function BankStatementPage() {
                 <thead>
                   <tr className="bg-gray-50 border-b border-gray-200">
                     <th className="text-left py-2.5 px-4 font-medium text-gray-600">วันที่</th>
-                    <th className="text-left py-2.5 px-4 font-medium text-gray-600">เลขที่ชำระ</th>
-                    <th className="text-left py-2.5 px-4 font-medium text-gray-600">รายการ / ผู้รับเงิน</th>
+                    <th className="text-left py-2.5 px-4 font-medium text-gray-600">เลขที่เอกสาร</th>
+                    <th className="text-left py-2.5 px-4 font-medium text-gray-600">รายการ</th>
                     <th className="text-left py-2.5 px-4 font-medium text-gray-600">วิธีชำระ</th>
                     <th className="text-left py-2.5 px-4 font-medium text-gray-600">เลขอ้างอิง</th>
                     <th className="text-right py-2.5 px-4 font-medium text-gray-600">หัก ณ ที่จ่าย</th>
+                    <th className="text-right py-2.5 px-4 font-medium text-gray-600 text-green-600">เงินเข้า</th>
                     <th className="text-right py-2.5 px-4 font-medium text-gray-600 text-red-600">เงินออก</th>
                     <th className="text-right py-2.5 px-4 font-medium text-gray-600">ยอดสะสม</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {result.payments.map((p) => {
-                    runningTotal += p.amount;
-                    const vendors = [...new Set(p.prep.items.map((i) => i.ap.vendor.name))].join(", ");
-                    const wht = p.prep.totalWithholdingTax ?? 0;
+                  {result.entries.map((e) => {
+                    runningTotal += e.type === "IN" ? e.amount : -e.amount;
                     return (
-                      <tr key={p.id} className="border-b border-gray-100 hover:bg-gray-50">
-                        <td className="py-2.5 px-4 whitespace-nowrap text-gray-700">{formatDate(p.paymentDate)}</td>
-                        <td className="py-2.5 px-4 font-mono text-blue-700 text-xs">{p.paymentNumber}</td>
-                        <td className="py-2.5 px-4 text-gray-800">
-                          <div>{vendors}</div>
-                          {p.notes && <div className="text-xs text-gray-400">{p.notes}</div>}
+                      <tr key={`${e.type}-${e.id}`} className="border-b border-gray-100 hover:bg-gray-50">
+                        <td className="py-2.5 px-4 whitespace-nowrap text-gray-700">{formatDate(e.date)}</td>
+                        <td className="py-2.5 px-4 font-mono text-xs">
+                          <Link href={e.href} className="text-blue-700 hover:underline">
+                            {e.documentNumber}
+                          </Link>
                         </td>
-                        <td className="py-2.5 px-4 text-gray-600">{PAYMENT_METHOD_LABELS[p.paymentMethod] ?? p.paymentMethod}</td>
-                        <td className="py-2.5 px-4 font-mono text-xs text-gray-500">{p.referenceNumber ?? "-"}</td>
+                        <td className="py-2.5 px-4 text-gray-800">
+                          <div>{e.description}</div>
+                          {e.notes && <div className="text-xs text-gray-400">{e.notes}</div>}
+                        </td>
+                        <td className="py-2.5 px-4 text-gray-600">{PAYMENT_METHOD_LABELS[e.paymentMethod] ?? e.paymentMethod}</td>
+                        <td className="py-2.5 px-4 font-mono text-xs text-gray-500">{e.referenceNumber ?? "-"}</td>
                         <td className="py-2.5 px-4 text-right text-orange-600">
-                          {wht > 0 ? `฿${formatCurrency(wht)}` : "-"}
+                          {e.withholdingTax > 0 ? `฿${formatCurrency(e.withholdingTax)}` : "-"}
+                        </td>
+                        <td className="py-2.5 px-4 text-right font-medium text-green-600">
+                          {e.type === "IN" ? `฿${formatCurrency(e.amount)}` : "-"}
                         </td>
                         <td className="py-2.5 px-4 text-right font-medium text-red-600">
-                          ฿{formatCurrency(p.amount)}
+                          {e.type === "OUT" ? `฿${formatCurrency(e.amount)}` : "-"}
                         </td>
                         <td className="py-2.5 px-4 text-right text-gray-700">฿{formatCurrency(runningTotal)}</td>
                       </tr>
@@ -216,7 +226,8 @@ export default function BankStatementPage() {
                   <tr className="bg-gray-50 font-semibold border-t border-gray-200">
                     <td colSpan={5} className="py-2.5 px-4 text-right text-gray-700">รวม</td>
                     <td className="py-2.5 px-4 text-right text-orange-700">฿{formatCurrency(totalWHT)}</td>
-                    <td className="py-2.5 px-4 text-right text-red-700">฿{formatCurrency(totalPaid)}</td>
+                    <td className="py-2.5 px-4 text-right text-green-700">฿{formatCurrency(totalIn)}</td>
+                    <td className="py-2.5 px-4 text-right text-red-700">฿{formatCurrency(totalOut)}</td>
                     <td className="py-2.5 px-4 text-right text-gray-800">฿{formatCurrency(runningTotal)}</td>
                   </tr>
                 </tfoot>
