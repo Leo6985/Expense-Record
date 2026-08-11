@@ -610,6 +610,7 @@ export type DebitCreditNoteRecord = {
   approvedAt: Date | null;
   createdAt: Date;
   updatedAt: Date;
+  detail: string | null;
 };
 
 export const DEBIT_CREDIT_NOTE_TAB_NAME = "DebitCreditNotes";
@@ -633,6 +634,9 @@ export const DEBIT_CREDIT_NOTE_COLUMNS: ColumnDef[] = [
   { key: "approvedAt", type: "date" },
   { key: "createdAt", type: "date" },
   { key: "updatedAt", type: "date" },
+  // Appended after the fact — keep at the end so existing sheet rows (written under the
+  // old column order) don't have their later columns misaligned by an insert in the middle.
+  { key: "detail", type: "string" },
 ];
 
 export const debitCreditNotesTable = new SheetTable<DebitCreditNoteRecord>(

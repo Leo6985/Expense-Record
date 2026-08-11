@@ -133,6 +133,7 @@ model DebitCreditNote {
   vatAmount      Float        @default(0)
   totalAmount    Float
   reason         String?
+  detail         String?
   status         String       @default("DRAFT") // DRAFT | APPROVED | CANCELLED
   notes          String?
   createdByName  String?

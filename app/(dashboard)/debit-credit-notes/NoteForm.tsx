@@ -28,6 +28,7 @@ export type NoteFormInitial = {
   amount: string;
   vatAmount: string;
   reason: string;
+  detail: string;
   notes: string;
 };
 
@@ -38,6 +39,7 @@ export type NoteFormValues = {
   amount: number;
   vatAmount?: number;
   reason?: string;
+  detail?: string;
   notes?: string;
 };
 
@@ -72,6 +74,7 @@ export default function NoteForm({
   const [amount, setAmount] = useState(initialValues?.amount ?? "");
   const [vatAmount, setVatAmount] = useState(initialValues?.vatAmount ?? "0");
   const [reason, setReason] = useState(initialValues?.reason ?? "");
+  const [detail, setDetail] = useState(initialValues?.detail ?? "");
   const [notes, setNotes] = useState(initialValues?.notes ?? "");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -114,6 +117,7 @@ export default function NoteForm({
         amount: amountNum,
         vatAmount: vatAmountNum || undefined,
         reason: reason || undefined,
+        detail: detail || undefined,
         notes: notes || undefined,
       });
     } catch (err) {
@@ -242,6 +246,16 @@ export default function NoteForm({
                 value={reason}
                 onChange={(e) => setReason(e.target.value)}
                 placeholder="เช่น สินค้าคืน, แก้ไขราคา"
+                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+            </div>
+            <div className="col-span-2">
+              <label className="block text-sm font-medium text-gray-700 mb-1">รายละเอียด</label>
+              <textarea
+                value={detail}
+                onChange={(e) => setDetail(e.target.value)}
+                rows={3}
+                placeholder="รายละเอียดรายการที่เพิ่ม/ลดหนี้ เช่น รายการสินค้า จำนวน สาเหตุ (จะแสดงบนเอกสารที่พิมพ์)"
                 className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
               />
             </div>

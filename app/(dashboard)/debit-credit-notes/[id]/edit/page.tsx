@@ -44,6 +44,7 @@ export default function EditDebitCreditNotePage() {
     amount: String(note.amount),
     vatAmount: String(note.vatAmount),
     reason: note.reason ?? "",
+    detail: note.detail ?? "",
     notes: note.notes ?? "",
   };
 

@@ -45,6 +45,9 @@ export default function SalesInvoiceDetailPage() {
     .filter((n) => n.status === "APPROVED")
     .reduce((s, n) => s + (n.type === "DEBIT" ? n.totalAmount : -n.totalAmount), 0);
   const effectiveTotal = Math.round((invoice.totalAmount + noteAdjustment) * 100) / 100;
+  const activeNotes = invoice.debitCreditNotes.filter((n) => n.status !== "CANCELLED");
+  const hasDebitNote = activeNotes.some((n) => n.type === "DEBIT");
+  const hasCreditNote = activeNotes.some((n) => n.type === "CREDIT");
 
   async function handleCancel() {
     if (!confirm("ยืนยันการยกเลิกใบกำกับภาษีขายนี้?")) return;
@@ -67,6 +70,16 @@ export default function SalesInvoiceDetailPage() {
         <span className={`inline-flex px-2.5 py-0.5 rounded-full text-xs font-medium ${isOverdue ? "bg-red-100 text-red-700" : s.color}`}>
           {isOverdue ? "เกินกำหนด" : s.label}
         </span>
+        {hasDebitNote && (
+          <span className="inline-flex px-2.5 py-0.5 rounded-full text-xs font-medium bg-orange-100 text-orange-700">
+            🔺 มีใบเพิ่มหนี้
+          </span>
+        )}
+        {hasCreditNote && (
+          <span className="inline-flex px-2.5 py-0.5 rounded-full text-xs font-medium bg-teal-100 text-teal-700">
+            🔻 มีใบลดหนี้
+          </span>
+        )}
       </div>
 
       {error && (

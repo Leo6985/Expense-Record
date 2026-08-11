@@ -24,6 +24,7 @@ async function syncNoteToSheet(note: {
   vatAmount: number;
   totalAmount: number;
   reason: string | null;
+  detail: string | null;
   status: string;
   notes: string | null;
   createdByName: string | null;
@@ -95,6 +96,7 @@ export async function createDebitCreditNote(data: {
   amount: number;
   vatAmount?: number;
   reason?: string;
+  detail?: string;
   notes?: string;
 }) {
   const session = await auth();
@@ -120,6 +122,7 @@ export async function createDebitCreditNote(data: {
       vatAmount,
       totalAmount,
       reason: data.reason,
+      detail: data.detail,
       notes: data.notes,
       createdByName,
       createdById,
@@ -138,6 +141,7 @@ export async function updateDebitCreditNote(
     amount: number;
     vatAmount?: number;
     reason?: string;
+    detail?: string;
     notes?: string;
   }
 ) {
@@ -156,6 +160,7 @@ export async function updateDebitCreditNote(
       vatAmount,
       totalAmount,
       reason: data.reason,
+      detail: data.detail,
       notes: data.notes,
     },
   });

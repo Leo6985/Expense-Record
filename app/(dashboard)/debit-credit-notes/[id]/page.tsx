@@ -120,6 +120,14 @@ export default function DebitCreditNoteDetailPage() {
             ยกเลิก
           </button>
         )}
+        <a
+          href={`/debit-credit-notes/${params.id}/print`}
+          target="_blank"
+          rel="noreferrer"
+          className="border border-gray-300 text-gray-700 px-4 py-2 rounded-lg text-sm font-medium hover:bg-gray-50 transition-colors ml-auto"
+        >
+          🖨️ พิมพ์ / PDF
+        </a>
       </div>
 
       <div className="bg-white rounded-xl border border-gray-200 p-5 mb-5">
@@ -136,6 +144,12 @@ export default function DebitCreditNoteDetailPage() {
           {note.reason && <InfoRow label="เหตุผล" value={note.reason} />}
           <InfoRow label="ผู้จัดทำ" value={note.createdByName ?? "-"} />
           <InfoRow label="ผู้อนุมัติ" value={note.approvedByName ?? "-"} />
+          {note.detail && (
+            <div className="col-span-2">
+              <div className="text-xs text-gray-500 mb-0.5">รายละเอียด</div>
+              <div className="font-medium text-gray-900 whitespace-pre-wrap">{note.detail}</div>
+            </div>
+          )}
           {note.notes && <InfoRow label="หมายเหตุ" value={note.notes} />}
         </div>
       </div>
