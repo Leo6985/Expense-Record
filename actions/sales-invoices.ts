@@ -77,7 +77,12 @@ export async function syncInvoiceStatus(tx: Prisma.TransactionClient, invoiceId:
   const allSettled = activeItems.length > 0 && activeItems.every((item) => item.receipt.status === "APPROVED");
 
   let newStatus = invoice.status;
-  if (remaining <= AMOUNT_TOLERANCE && allSettled) newStatus = "RECEIVED";
+  // A credit note can offset the invoice down to (or past) zero on its own, with no
+  // receipt ever created — `allSettled` requires at least one receipt item, so that case
+  // must be checked independently or a fully credited invoice stays PENDING forever
+  // (and shows as overdue past its due date, which is wrong once nothing is owed).
+  if (effectiveTotal <= AMOUNT_TOLERANCE) newStatus = "RECEIVED";
+  else if (remaining <= AMOUNT_TOLERANCE && allSettled) newStatus = "RECEIVED";
   else if (consumed > AMOUNT_TOLERANCE) newStatus = "PARTIALLY_RECEIVED";
   else newStatus = "PENDING";
 
