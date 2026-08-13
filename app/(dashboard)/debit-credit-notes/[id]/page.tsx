@@ -170,11 +170,11 @@ export default function DebitCreditNoteDetailPage() {
         </h2>
         <div className="space-y-2 text-sm">
           <div className="flex justify-between text-gray-600">
-            <span>มูลค่าใบกำกับภาษีฉบับเดิม (ก่อน VAT)</span>
+            <span>มูลค่าใบกำกับภาษีฉบับเดิม (ก่อนภาษีมูลค่าเพิ่ม)</span>
             <span>฿{formatCurrency(note.invoice.amount)}</span>
           </div>
           <div className="flex justify-between text-gray-600">
-            <span>มูลค่าใบกำกับภาษีที่ถูกต้อง (ก่อน VAT)</span>
+            <span>มูลค่าใบกำกับภาษีที่ถูกต้อง (ก่อนภาษีมูลค่าเพิ่ม)</span>
             <span>฿{formatCurrency(correctedInvoiceAmount)}</span>
           </div>
           <div className="flex justify-between font-medium text-gray-900 border-t border-gray-100 pt-2">
@@ -190,15 +190,15 @@ export default function DebitCreditNoteDetailPage() {
         <h2 className="font-semibold text-gray-900 mb-4 pb-2 border-b border-gray-100">จำนวนเงิน</h2>
         <div className="space-y-2 text-sm">
           <div className="flex justify-between text-gray-600">
-            <span>ยอดรวมมูลค่าใบ{note.type === "DEBIT" ? "เพิ่ม" : "ลด"}หนี้ (ก่อน VAT)</span>
+            <span>ยอดรวมมูลค่าใบ{note.type === "DEBIT" ? "เพิ่ม" : "ลด"}หนี้ (ก่อนภาษีมูลค่าเพิ่ม)</span>
             <span>฿{formatCurrency(note.amount)}</span>
           </div>
           <div className="flex justify-between text-gray-600">
-            <span>ภาษีมูลค่าเพิ่ม (VAT)</span>
+            <span>ภาษีมูลค่าเพิ่ม</span>
             <span>฿{formatCurrency(note.vatAmount)}</span>
           </div>
           <div className="flex justify-between font-bold text-gray-900 text-lg border-t border-gray-200 pt-3 mt-2">
-            <span>จำนวนเงินรวมทั้งสิ้น (หลัง VAT)</span>
+            <span>จำนวนเงินรวมทั้งสิ้น (หลังภาษีมูลค่าเพิ่ม)</span>
             <span className={note.type === "DEBIT" ? "text-orange-700" : "text-teal-700"}>
               {note.type === "DEBIT" ? "+" : "-"}฿{formatCurrency(note.totalAmount)}
             </span>

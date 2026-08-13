@@ -114,7 +114,7 @@ export default async function DebitCreditNotePrintPage({
           <tbody>
             <tr>
               <td className="border border-gray-300 px-3 py-2.5 text-right text-gray-600 bg-gray-50">
-                มูลค่าใบกำกับภาษีฉบับเดิม (ก่อน VAT)
+                มูลค่าใบกำกับภาษีฉบับเดิม (ก่อนภาษีมูลค่าเพิ่ม)
               </td>
               <td className="border border-gray-300 px-3 py-2.5 text-right text-gray-700 w-40">
                 {formatCurrency(note.invoice.amount)}
@@ -122,7 +122,7 @@ export default async function DebitCreditNotePrintPage({
             </tr>
             <tr>
               <td className="border border-gray-300 px-3 py-2.5 text-right text-gray-600 bg-gray-50">
-                มูลค่าใบกำกับภาษีที่ถูกต้อง (ก่อน VAT)
+                มูลค่าใบกำกับภาษีที่ถูกต้อง (ก่อนภาษีมูลค่าเพิ่ม)
               </td>
               <td className="border border-gray-300 px-3 py-2.5 text-right text-gray-700">
                 {formatCurrency(correctedInvoiceAmount)}
@@ -136,7 +136,7 @@ export default async function DebitCreditNotePrintPage({
             </tr>
             <tr>
               <td className="border border-gray-300 px-3 py-2.5 text-right text-gray-600 bg-gray-50">
-                ยอดรวมมูลค่าใบ{note.type === "DEBIT" ? "เพิ่ม" : "ลด"}หนี้ (ก่อน VAT)
+                ยอดรวมมูลค่าใบ{note.type === "DEBIT" ? "เพิ่ม" : "ลด"}หนี้ (ก่อนภาษีมูลค่าเพิ่ม)
               </td>
               <td className="border border-gray-300 px-3 py-2.5 text-right text-gray-700">
                 {sign}{formatCurrency(note.amount)}
@@ -144,7 +144,7 @@ export default async function DebitCreditNotePrintPage({
             </tr>
             <tr>
               <td className="border border-gray-300 px-3 py-2.5 text-right text-gray-600 bg-gray-50">
-                ภาษีมูลค่าเพิ่ม (VAT)
+                ภาษีมูลค่าเพิ่ม
               </td>
               <td className="border border-gray-300 px-3 py-2.5 text-right text-gray-700">
                 {sign}{formatCurrency(note.vatAmount)}

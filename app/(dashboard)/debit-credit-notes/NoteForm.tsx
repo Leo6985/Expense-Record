@@ -266,7 +266,7 @@ export default function NoteForm({
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
-                ยอดรวมมูลค่าใบ{type === "DEBIT" ? "เพิ่ม" : "ลด"}หนี้ (ก่อน VAT) *
+                ยอดรวมมูลค่าใบ{type === "DEBIT" ? "เพิ่ม" : "ลด"}หนี้ (ก่อนภาษีมูลค่าเพิ่ม) *
               </label>
               <input
                 type="number"
@@ -279,7 +279,7 @@ export default function NoteForm({
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">ภาษีมูลค่าเพิ่ม (VAT)</label>
+              <label className="block text-sm font-medium text-gray-700 mb-1">ภาษีมูลค่าเพิ่ม</label>
               <input
                 type="number"
                 min="0"
@@ -299,7 +299,7 @@ export default function NoteForm({
             </div>
           </div>
           <div className="mt-4 pt-4 border-t border-gray-100 flex justify-between font-bold text-blue-700 text-base">
-            <span>จำนวนเงินรวมทั้งสิ้น (หลัง VAT)</span>
+            <span>จำนวนเงินรวมทั้งสิ้น (หลังภาษีมูลค่าเพิ่ม)</span>
             <span>฿{formatCurrency(totalAmount)}</span>
           </div>
         </div>
@@ -311,11 +311,11 @@ export default function NoteForm({
             </h2>
             <div className="space-y-2 text-sm">
               <div className="flex justify-between text-gray-600">
-                <span>มูลค่าใบกำกับภาษีฉบับเดิม (ก่อน VAT)</span>
+                <span>มูลค่าใบกำกับภาษีฉบับเดิม (ก่อนภาษีมูลค่าเพิ่ม)</span>
                 <span>฿{formatCurrency(originalInvoiceAmount)}</span>
               </div>
               <div className="flex justify-between text-gray-600">
-                <span>มูลค่าใบกำกับภาษีที่ถูกต้อง (ก่อน VAT)</span>
+                <span>มูลค่าใบกำกับภาษีที่ถูกต้อง (ก่อนภาษีมูลค่าเพิ่ม)</span>
                 <span>฿{formatCurrency(correctedInvoiceAmount)}</span>
               </div>
               <div className="flex justify-between font-medium text-gray-900 border-t border-gray-100 pt-2">
