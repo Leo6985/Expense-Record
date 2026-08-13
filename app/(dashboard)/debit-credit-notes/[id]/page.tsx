@@ -5,12 +5,14 @@ import { useParams, useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
 import {
   getDebitCreditNote,
+  getAdjacentDebitCreditNoteIds,
   approveDebitCreditNote,
   unapproveDebitCreditNote,
   cancelDebitCreditNote,
 } from "@/actions/debit-credit-notes";
 import { formatDate, formatCurrency } from "@/lib/utils";
 import Link from "next/link";
+import DocNav from "@/components/DocNav";
 
 const statusConfig: Record<string, { label: string; color: string }> = {
   DRAFT: { label: "ร่าง", color: "bg-gray-100 text-gray-700" },
@@ -32,18 +34,25 @@ export default function DebitCreditNoteDetailPage() {
   const [note, setNote] = useState<Note>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [adjacent, setAdjacent] = useState<{ prevId: string | null; nextId: string | null }>({
+    prevId: null,
+    nextId: null,
+  });
 
   const u = session?.user as { level?: string; role?: string } | undefined;
   const isManager = u?.level === "MANAGER" || u?.role === "OWNER";
 
   useEffect(() => {
     getDebitCreditNote(params.id as string).then(setNote);
+    getAdjacentDebitCreditNoteIds(params.id as string).then(setAdjacent);
   }, [params.id]);
 
   if (!note) return <div className="text-gray-400 text-sm">กำลังโหลด...</div>;
 
   const s = statusConfig[note.status] ?? { label: note.status, color: "bg-gray-100 text-gray-700" };
   const t = typeConfig[note.type] ?? { label: note.type, color: "bg-gray-100 text-gray-700" };
+  const correctedInvoiceAmount =
+    note.type === "DEBIT" ? note.invoice.amount + note.amount : note.invoice.amount - note.amount;
 
   async function handleApprove() {
     if (!confirm("ยืนยันการอนุมัติรายการนี้?")) return;
@@ -85,6 +94,7 @@ export default function DebitCreditNoteDetailPage() {
         <h1 className="text-2xl font-bold text-gray-900 font-mono">{note.noteNumber}</h1>
         <span className={`inline-flex px-2.5 py-0.5 rounded-full text-xs font-medium ${t.color}`}>{t.label}</span>
         <span className={`inline-flex px-2.5 py-0.5 rounded-full text-xs font-medium ${s.color}`}>{s.label}</span>
+        <DocNav basePath="/debit-credit-notes" prevId={adjacent.prevId} nextId={adjacent.nextId} className="ml-auto" />
       </div>
 
       {error && (
@@ -154,19 +164,41 @@ export default function DebitCreditNoteDetailPage() {
         </div>
       </div>
 
+      <div className="bg-white rounded-xl border border-gray-200 p-5 mb-5">
+        <h2 className="font-semibold text-gray-900 mb-4 pb-2 border-b border-gray-100">
+          สรุปมูลค่าตามใบกำกับภาษี (ตามมาตรา 86/9, 86/10)
+        </h2>
+        <div className="space-y-2 text-sm">
+          <div className="flex justify-between text-gray-600">
+            <span>มูลค่าใบกำกับภาษีฉบับเดิม (ก่อน VAT)</span>
+            <span>฿{formatCurrency(note.invoice.amount)}</span>
+          </div>
+          <div className="flex justify-between text-gray-600">
+            <span>มูลค่าใบกำกับภาษีที่ถูกต้อง (ก่อน VAT)</span>
+            <span>฿{formatCurrency(correctedInvoiceAmount)}</span>
+          </div>
+          <div className="flex justify-between font-medium text-gray-900 border-t border-gray-100 pt-2">
+            <span>ผลต่าง</span>
+            <span className={note.type === "DEBIT" ? "text-orange-700" : "text-teal-700"}>
+              {note.type === "DEBIT" ? "+" : "-"}฿{formatCurrency(note.amount)}
+            </span>
+          </div>
+        </div>
+      </div>
+
       <div className="bg-white rounded-xl border border-gray-200 p-5">
         <h2 className="font-semibold text-gray-900 mb-4 pb-2 border-b border-gray-100">จำนวนเงิน</h2>
         <div className="space-y-2 text-sm">
           <div className="flex justify-between text-gray-600">
-            <span>ยอดก่อน VAT</span>
+            <span>ยอดรวมมูลค่าใบ{note.type === "DEBIT" ? "เพิ่ม" : "ลด"}หนี้ (ก่อน VAT)</span>
             <span>฿{formatCurrency(note.amount)}</span>
           </div>
           <div className="flex justify-between text-gray-600">
-            <span>VAT</span>
+            <span>ภาษีมูลค่าเพิ่ม (VAT)</span>
             <span>฿{formatCurrency(note.vatAmount)}</span>
           </div>
           <div className="flex justify-between font-bold text-gray-900 text-lg border-t border-gray-200 pt-3 mt-2">
-            <span>รวมทั้งสิ้น</span>
+            <span>จำนวนเงินรวมทั้งสิ้น (หลัง VAT)</span>
             <span className={note.type === "DEBIT" ? "text-orange-700" : "text-teal-700"}>
               {note.type === "DEBIT" ? "+" : "-"}฿{formatCurrency(note.totalAmount)}
             </span>

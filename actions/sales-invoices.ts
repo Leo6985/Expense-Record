@@ -109,6 +109,19 @@ export async function getSalesInvoices(search?: string, status?: string) {
   });
 }
 
+export async function getAdjacentSalesInvoiceIds(id: string) {
+  const rows = await prisma.salesInvoice.findMany({
+    select: { id: true },
+    orderBy: { invoiceDate: "desc" },
+  });
+  const idx = rows.findIndex((r) => r.id === id);
+  if (idx === -1) return { prevId: null, nextId: null };
+  return {
+    prevId: idx > 0 ? rows[idx - 1].id : null,
+    nextId: idx < rows.length - 1 ? rows[idx + 1].id : null,
+  };
+}
+
 export async function getSalesInvoiceById(id: string) {
   return prisma.salesInvoice.findUnique({
     where: { id },

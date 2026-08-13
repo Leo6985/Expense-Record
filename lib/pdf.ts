@@ -15,7 +15,7 @@ function formatNum(n: number) {
 function formatDateStr(d: Date | string | null | undefined) {
   if (!d) return "-";
   const dt = new Date(d);
-  return `${String(dt.getDate()).padStart(2, "0")}/${String(dt.getMonth() + 1).padStart(2, "0")}/${dt.getFullYear() + 543}`;
+  return `${String(dt.getDate()).padStart(2, "0")}/${String(dt.getMonth() + 1).padStart(2, "0")}/${dt.getFullYear()}`;
 }
 
 export function exportPurchaseOrderPDF(po: {

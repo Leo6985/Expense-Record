@@ -67,6 +67,19 @@ export async function getDebitCreditNotes(search?: string, type?: string, status
   });
 }
 
+export async function getAdjacentDebitCreditNoteIds(id: string) {
+  const rows = await prisma.debitCreditNote.findMany({
+    select: { id: true },
+    orderBy: { createdAt: "desc" },
+  });
+  const idx = rows.findIndex((r) => r.id === id);
+  if (idx === -1) return { prevId: null, nextId: null };
+  return {
+    prevId: idx > 0 ? rows[idx - 1].id : null,
+    nextId: idx < rows.length - 1 ? rows[idx + 1].id : null,
+  };
+}
+
 export async function getDebitCreditNote(id: string) {
   return prisma.debitCreditNote.findUnique({
     where: { id },

@@ -2,9 +2,10 @@
 
 import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
-import { getSalesInvoiceById, cancelSalesInvoice } from "@/actions/sales-invoices";
+import { getSalesInvoiceById, getAdjacentSalesInvoiceIds, cancelSalesInvoice } from "@/actions/sales-invoices";
 import { formatDate, formatCurrency } from "@/lib/utils";
 import Link from "next/link";
+import DocNav from "@/components/DocNav";
 
 const statusConfig: Record<string, { label: string; color: string }> = {
   PENDING: { label: "รอรับชำระ", color: "bg-yellow-100 text-yellow-700" },
@@ -31,9 +32,14 @@ export default function SalesInvoiceDetailPage() {
   const [invoice, setInvoice] = useState<Invoice>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [adjacent, setAdjacent] = useState<{ prevId: string | null; nextId: string | null }>({
+    prevId: null,
+    nextId: null,
+  });
 
   useEffect(() => {
     getSalesInvoiceById(params.id as string).then(setInvoice);
+    getAdjacentSalesInvoiceIds(params.id as string).then(setAdjacent);
   }, [params.id]);
 
   if (!invoice) return <div className="text-gray-400 text-sm">กำลังโหลด...</div>;
@@ -80,6 +86,7 @@ export default function SalesInvoiceDetailPage() {
             🔻 มีใบลดหนี้
           </span>
         )}
+        <DocNav basePath="/sales-invoices" prevId={adjacent.prevId} nextId={adjacent.nextId} className="ml-auto" />
       </div>
 
       {error && (

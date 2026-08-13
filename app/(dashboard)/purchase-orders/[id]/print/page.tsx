@@ -13,7 +13,7 @@ export default async function POPrintPage({
   if (!po) notFound();
 
   const fmt = (d: Date | null | undefined) =>
-    d ? new Intl.DateTimeFormat("th-TH", { day: "2-digit", month: "2-digit", year: "numeric" }).format(new Date(d)) : null;
+    d ? new Intl.DateTimeFormat("th-TH", { day: "2-digit", month: "2-digit", year: "numeric", calendar: "gregory" }).format(new Date(d)) : null;
 
   const docDate = fmt(po.createdAt) ?? formatDate(po.orderDate);
   const createdDate = fmt(po.createdAt);

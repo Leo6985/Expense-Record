@@ -66,6 +66,19 @@ export async function getPurchaseOrders(search?: string, status?: string) {
   });
 }
 
+export async function getAdjacentPurchaseOrderIds(id: string) {
+  const rows = await prisma.purchaseOrder.findMany({
+    select: { id: true },
+    orderBy: { createdAt: "desc" },
+  });
+  const idx = rows.findIndex((r) => r.id === id);
+  if (idx === -1) return { prevId: null, nextId: null };
+  return {
+    prevId: idx > 0 ? rows[idx - 1].id : null,
+    nextId: idx < rows.length - 1 ? rows[idx + 1].id : null,
+  };
+}
+
 export async function getPurchaseOrder(id: string) {
   return prisma.purchaseOrder.findUnique({
     where: { id },

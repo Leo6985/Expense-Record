@@ -3,9 +3,10 @@
 import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
-import { getReceipt, approveReceipt, unapproveReceipt, cancelReceipt, deleteReceipt } from "@/actions/receipts";
+import { getReceipt, getAdjacentReceiptIds, approveReceipt, unapproveReceipt, cancelReceipt, deleteReceipt } from "@/actions/receipts";
 import { formatDate, formatCurrency } from "@/lib/utils";
 import Link from "next/link";
+import DocNav from "@/components/DocNav";
 
 const statusConfig: Record<string, { label: string; color: string }> = {
   DRAFT: { label: "ร่าง", color: "bg-gray-100 text-gray-700" },
@@ -22,12 +23,17 @@ export default function ReceiptDetailPage() {
   const [receipt, setReceipt] = useState<Receipt>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [adjacent, setAdjacent] = useState<{ prevId: string | null; nextId: string | null }>({
+    prevId: null,
+    nextId: null,
+  });
 
   const u = session?.user as { level?: string; role?: string } | undefined;
   const isManager = u?.level === "MANAGER" || u?.role === "OWNER";
 
   useEffect(() => {
     getReceipt(params.id as string).then(setReceipt);
+    getAdjacentReceiptIds(params.id as string).then(setAdjacent);
   }, [params.id]);
 
   if (!receipt) return <div className="text-gray-400 text-sm">กำลังโหลด...</div>;
@@ -86,6 +92,7 @@ export default function ReceiptDetailPage() {
         <Link href="/receipts" className="text-gray-400 hover:text-gray-600">← กลับ</Link>
         <h1 className="text-2xl font-bold text-gray-900">{receipt.receiptNumber}</h1>
         <span className={`inline-flex px-2.5 py-0.5 rounded-full text-xs font-medium ${s.color}`}>{s.label}</span>
+        <DocNav basePath="/receipts" prevId={adjacent.prevId} nextId={adjacent.nextId} className="ml-auto" />
       </div>
 
       {error && (

@@ -67,6 +67,19 @@ export async function getPaymentPreps(status?: string) {
   });
 }
 
+export async function getAdjacentPaymentPrepIds(id: string) {
+  const rows = await prisma.paymentPrep.findMany({
+    select: { id: true },
+    orderBy: { createdAt: "desc" },
+  });
+  const idx = rows.findIndex((r) => r.id === id);
+  if (idx === -1) return { prevId: null, nextId: null };
+  return {
+    prevId: idx > 0 ? rows[idx - 1].id : null,
+    nextId: idx < rows.length - 1 ? rows[idx + 1].id : null,
+  };
+}
+
 export async function getPaymentPrep(id: string) {
   return prisma.paymentPrep.findUnique({
     where: { id },

@@ -2,9 +2,10 @@
 
 import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { getGoodsReceipt, deleteGoodsReceipt } from "@/actions/goods-receipts";
+import { getGoodsReceipt, getAdjacentGoodsReceiptIds, deleteGoodsReceipt } from "@/actions/goods-receipts";
 import { formatDate, formatCurrency } from "@/lib/utils";
 import Link from "next/link";
+import DocNav from "@/components/DocNav";
 
 type GR = Awaited<ReturnType<typeof getGoodsReceipt>>;
 
@@ -14,9 +15,14 @@ export default function GoodsReceiptDetailPage() {
   const [gr, setGR] = useState<GR>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [adjacent, setAdjacent] = useState<{ prevId: string | null; nextId: string | null }>({
+    prevId: null,
+    nextId: null,
+  });
 
   useEffect(() => {
     getGoodsReceipt(params.id as string).then(setGR);
+    getAdjacentGoodsReceiptIds(params.id as string).then(setAdjacent);
   }, [params.id]);
 
   if (!gr) return <div className="text-gray-400 text-sm">กำลังโหลด...</div>;
@@ -43,6 +49,7 @@ export default function GoodsReceiptDetailPage() {
         <Link href="/goods-receipts" className="text-gray-400 hover:text-gray-600">← กลับ</Link>
         <h1 className="text-2xl font-bold text-gray-900">{gr.grNumber}</h1>
         <span className="inline-flex px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-700">รับแล้ว</span>
+        <DocNav basePath="/goods-receipts" prevId={adjacent.prevId} nextId={adjacent.nextId} className="ml-auto" />
       </div>
 
       {error && (

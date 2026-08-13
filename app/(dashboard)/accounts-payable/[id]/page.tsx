@@ -3,9 +3,10 @@
 import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
-import { getAccountsPayableById, approveAccountsPayable, unapproveAccountsPayable, cancelAccountsPayable } from "@/actions/accounts-payable";
+import { getAccountsPayableById, getAdjacentAccountsPayableIds, approveAccountsPayable, unapproveAccountsPayable, cancelAccountsPayable } from "@/actions/accounts-payable";
 import { formatDate, formatCurrency } from "@/lib/utils";
 import Link from "next/link";
+import DocNav from "@/components/DocNav";
 
 const statusConfig: Record<string, { label: string; color: string }> = {
   PENDING: { label: "รอดำเนินการ", color: "bg-yellow-100 text-yellow-700" },
@@ -24,12 +25,17 @@ export default function APDetailPage() {
   const [ap, setAP] = useState<AP>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [adjacent, setAdjacent] = useState<{ prevId: string | null; nextId: string | null }>({
+    prevId: null,
+    nextId: null,
+  });
 
   const u = session?.user as { level?: string; role?: string } | undefined;
   const isManager = u?.level === "MANAGER" || u?.role === "OWNER";
 
   useEffect(() => {
     getAccountsPayableById(params.id as string).then(setAP);
+    getAdjacentAccountsPayableIds(params.id as string).then(setAdjacent);
   }, [params.id]);
 
   if (!ap) return <div className="text-gray-400 text-sm">กำลังโหลด...</div>;
@@ -79,6 +85,7 @@ export default function APDetailPage() {
         <span className={`inline-flex px-2.5 py-0.5 rounded-full text-xs font-medium ${isOverdue ? "bg-red-100 text-red-700" : s.color}`}>
           {isOverdue ? "เกินกำหนด" : s.label}
         </span>
+        <DocNav basePath="/accounts-payable" prevId={adjacent.prevId} nextId={adjacent.nextId} className="ml-auto" />
       </div>
 
       {error && (

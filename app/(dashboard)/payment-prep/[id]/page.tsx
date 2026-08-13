@@ -3,10 +3,11 @@
 import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
-import { getPaymentPrep, approvePaymentPrep, unapprovePaymentPrep, cancelPaymentPrep } from "@/actions/payment-prep";
+import { getPaymentPrep, getAdjacentPaymentPrepIds, approvePaymentPrep, unapprovePaymentPrep, cancelPaymentPrep } from "@/actions/payment-prep";
 import { getCompanyBankAccounts, createPayment, deletePayment } from "@/actions/payments";
 import { formatDate, formatCurrency } from "@/lib/utils";
 import Link from "next/link";
+import DocNav from "@/components/DocNav";
 
 const statusConfig: Record<string, { label: string; color: string }> = {
   DRAFT: { label: "ร่าง", color: "bg-gray-100 text-gray-700" },
@@ -31,10 +32,15 @@ export default function PaymentPrepDetailPage() {
   const [refNo, setRefNo] = useState("");
   const [paymentNotes, setPaymentNotes] = useState("");
   const [paymentDate, setPaymentDate] = useState(new Date().toISOString().split("T")[0]);
+  const [adjacent, setAdjacent] = useState<{ prevId: string | null; nextId: string | null }>({
+    prevId: null,
+    nextId: null,
+  });
 
   useEffect(() => {
     getPaymentPrep(params.id as string).then(setPrep);
     getCompanyBankAccounts().then((accts) => setBankAccounts(accts as BankAccount[]));
+    getAdjacentPaymentPrepIds(params.id as string).then(setAdjacent);
   }, [params.id]);
 
   const u = session?.user as { level?: string; role?: string } | undefined;
@@ -109,6 +115,7 @@ export default function PaymentPrepDetailPage() {
         <Link href="/payment-prep" className="text-gray-400 hover:text-gray-600">← กลับ</Link>
         <h1 className="text-2xl font-bold text-gray-900">{prep.prepNumber}</h1>
         <span className={`inline-flex px-2.5 py-0.5 rounded-full text-xs font-medium ${s.color}`}>{s.label}</span>
+        <DocNav basePath="/payment-prep" prevId={adjacent.prevId} nextId={adjacent.nextId} className="ml-auto" />
       </div>
 
       <div className="flex gap-2 mb-5 flex-wrap">

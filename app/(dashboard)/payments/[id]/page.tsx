@@ -1,9 +1,10 @@
-import { getPayment } from "@/actions/payments";
+import { getPayment, getAdjacentPaymentIds } from "@/actions/payments";
 import { formatDate, formatCurrency } from "@/lib/utils";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import PrintBtn from "./PrintBtn";
 import DeleteBtn from "./DeleteBtn";
+import DocNav from "@/components/DocNav";
 
 export default async function PaymentDetailPage({
   params,
@@ -13,6 +14,7 @@ export default async function PaymentDetailPage({
   const { id } = await params;
   const payment = await getPayment(id);
   if (!payment) notFound();
+  const adjacent = await getAdjacentPaymentIds(id);
 
   const hasWithholdingTax = payment.prep.items.some((item) => item.withholdingTaxAmount > 0);
 
@@ -23,6 +25,7 @@ export default async function PaymentDetailPage({
         <h1 className="text-2xl font-bold text-gray-900">{payment.paymentNumber}</h1>
         <span className="inline-flex px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-700">ชำระแล้ว</span>
         <div className="ml-auto flex gap-2 print:hidden">
+          <DocNav basePath="/payments" prevId={adjacent.prevId} nextId={adjacent.nextId} />
           <DeleteBtn paymentId={payment.id} prepId={payment.prepId} />
           {hasWithholdingTax && (
             <a

@@ -18,13 +18,15 @@ export default async function DebitCreditNotePrintPage({
   if (!note) notFound();
 
   const fmt = (d: Date | null | undefined) =>
-    d ? new Intl.DateTimeFormat("th-TH", { day: "2-digit", month: "2-digit", year: "numeric" }).format(new Date(d)) : null;
+    d ? new Intl.DateTimeFormat("th-TH", { day: "2-digit", month: "2-digit", year: "numeric", calendar: "gregory" }).format(new Date(d)) : null;
 
   const title = TYPE_TITLE[note.type] ?? { th: note.type, en: note.type };
   const docDate = fmt(note.noteDate);
   const createdDate = fmt(note.createdAt);
   const approvedDate = fmt(note.approvedAt);
   const sign = note.type === "DEBIT" ? "+" : "-";
+  const correctedInvoiceAmount =
+    note.type === "DEBIT" ? note.invoice.amount + note.amount : note.invoice.amount - note.amount;
 
   return (
     <div className="print-page bg-white">
@@ -107,24 +109,50 @@ export default async function DebitCreditNotePrintPage({
           </div>
         </div>
 
-        {/* Amount table */}
+        {/* Value comparison table — required per มาตรา 86/9, 86/10 แห่งประมวลรัษฎากร */}
         <table className="w-full text-sm border-collapse mb-6">
           <tbody>
             <tr>
-              <td className="border border-gray-300 px-3 py-2.5 text-right text-gray-600 bg-gray-50">ยอดก่อน VAT</td>
+              <td className="border border-gray-300 px-3 py-2.5 text-right text-gray-600 bg-gray-50">
+                มูลค่าใบกำกับภาษีฉบับเดิม (ก่อน VAT)
+              </td>
               <td className="border border-gray-300 px-3 py-2.5 text-right text-gray-700 w-40">
+                {formatCurrency(note.invoice.amount)}
+              </td>
+            </tr>
+            <tr>
+              <td className="border border-gray-300 px-3 py-2.5 text-right text-gray-600 bg-gray-50">
+                มูลค่าใบกำกับภาษีที่ถูกต้อง (ก่อน VAT)
+              </td>
+              <td className="border border-gray-300 px-3 py-2.5 text-right text-gray-700">
+                {formatCurrency(correctedInvoiceAmount)}
+              </td>
+            </tr>
+            <tr>
+              <td className="border border-gray-300 px-3 py-2.5 text-right text-gray-600 bg-gray-50">ผลต่าง</td>
+              <td className="border border-gray-300 px-3 py-2.5 text-right text-gray-700">
                 {sign}{formatCurrency(note.amount)}
               </td>
             </tr>
             <tr>
-              <td className="border border-gray-300 px-3 py-2.5 text-right text-gray-600 bg-gray-50">VAT</td>
+              <td className="border border-gray-300 px-3 py-2.5 text-right text-gray-600 bg-gray-50">
+                ยอดรวมมูลค่าใบ{note.type === "DEBIT" ? "เพิ่ม" : "ลด"}หนี้ (ก่อน VAT)
+              </td>
+              <td className="border border-gray-300 px-3 py-2.5 text-right text-gray-700">
+                {sign}{formatCurrency(note.amount)}
+              </td>
+            </tr>
+            <tr>
+              <td className="border border-gray-300 px-3 py-2.5 text-right text-gray-600 bg-gray-50">
+                ภาษีมูลค่าเพิ่ม (VAT)
+              </td>
               <td className="border border-gray-300 px-3 py-2.5 text-right text-gray-700">
                 {sign}{formatCurrency(note.vatAmount)}
               </td>
             </tr>
             <tr>
               <td className="border border-gray-300 px-3 py-2.5 text-right font-semibold text-gray-700 bg-gray-50">
-                รวมทั้งสิ้น ({note.type === "DEBIT" ? "เพิ่มหนี้" : "ลดหนี้"})
+                จำนวนเงินรวมทั้งสิ้น ({note.type === "DEBIT" ? "เพิ่มหนี้" : "ลดหนี้"})
               </td>
               <td className={`border border-gray-300 px-3 py-2.5 text-right font-bold text-base ${note.type === "DEBIT" ? "text-orange-700" : "text-teal-700"}`}>
                 {sign}{formatCurrency(note.totalAmount)}
