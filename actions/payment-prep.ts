@@ -102,7 +102,7 @@ export async function getPaymentPrep(id: string) {
 // count() collides with an existing number once any row in the middle of the sequence
 // has been deleted, causing the create to fail with a unique-constraint error.
 export async function getNextPrepNumber() {
-  const year = String(new Date().getFullYear() + 543).slice(-2);
+  const year = String(new Date().getFullYear());
   const month = String(new Date().getMonth() + 1).padStart(2, "0");
   const prefix = `PP${year}${month}`;
   const last = await prisma.paymentPrep.findFirst({
@@ -110,7 +110,7 @@ export async function getNextPrepNumber() {
     orderBy: { prepNumber: "desc" },
   });
   const lastSeq = last ? parseInt(last.prepNumber.slice(prefix.length)) : 0;
-  return `${prefix}${String(lastSeq + 1).padStart(4, "0")}`;
+  return `${prefix}${String(lastSeq + 1).padStart(3, "0")}`;
 }
 
 type PrepItemInput = { apId: string; amount: number; whtRate: number };

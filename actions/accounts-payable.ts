@@ -49,13 +49,18 @@ export async function syncAPToSheet(ap: {
 }
 
 /** Re-fetches each AP by id from Postgres and syncs its current state to the Sheet.
- * Use after a transaction that may have changed AP status via syncAPStatus() below. */
+ * Use after a transaction that may have changed AP status via syncAPStatus() below.
+ * Runs in parallel — sequentially this was N full-tab-read-then-write round trips to the
+ * Sheets API (each ~1-2s), which scaled linearly with item count and could push a prep/payment
+ * with several AP items past the server's request timeout. */
 export async function syncAPsToSheetById(apIds: string[]) {
   const uniqueIds = Array.from(new Set(apIds));
-  for (const id of uniqueIds) {
-    const ap = await prisma.accountsPayable.findUnique({ where: { id } });
-    if (ap) await syncAPToSheet(ap);
-  }
+  await Promise.all(
+    uniqueIds.map(async (id) => {
+      const ap = await prisma.accountsPayable.findUnique({ where: { id } });
+      if (ap) await syncAPToSheet(ap);
+    })
+  );
 }
 
 // Sums how much of an AP's totalAmount has been committed to non-cancelled payment
@@ -134,7 +139,7 @@ export async function getAccountsPayableById(id: string) {
 // count() collides with an existing number once any row in the middle of the sequence
 // has been deleted, causing the create to fail with a unique-constraint error.
 export async function getNextAPNumber() {
-  const year = String(new Date().getFullYear() + 543).slice(-2);
+  const year = String(new Date().getFullYear());
   const month = String(new Date().getMonth() + 1).padStart(2, "0");
   const prefix = `AP${year}${month}`;
   const last = await prisma.accountsPayable.findFirst({
@@ -142,7 +147,7 @@ export async function getNextAPNumber() {
     orderBy: { apNumber: "desc" },
   });
   const lastSeq = last ? parseInt(last.apNumber.slice(prefix.length)) : 0;
-  return `${prefix}${String(lastSeq + 1).padStart(4, "0")}`;
+  return `${prefix}${String(lastSeq + 1).padStart(3, "0")}`;
 }
 
 export async function createAccountsPayable(data: {

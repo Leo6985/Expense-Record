@@ -113,7 +113,7 @@ export async function getPayment(id: string) {
 // count() collides with an existing number once any row in the middle of the sequence
 // has been deleted, causing the create to fail with a unique-constraint error.
 export async function getNextPaymentNumber() {
-  const year = String(new Date().getFullYear() + 543).slice(-2);
+  const year = String(new Date().getFullYear());
   const month = String(new Date().getMonth() + 1).padStart(2, "0");
   const prefix = `PAY${year}${month}`;
   const last = await prisma.payment.findFirst({
@@ -121,7 +121,7 @@ export async function getNextPaymentNumber() {
     orderBy: { paymentNumber: "desc" },
   });
   const lastSeq = last ? parseInt(last.paymentNumber.slice(prefix.length)) : 0;
-  return `${prefix}${String(lastSeq + 1).padStart(4, "0")}`;
+  return `${prefix}${String(lastSeq + 1).padStart(3, "0")}`;
 }
 
 export async function createPayment(data: {

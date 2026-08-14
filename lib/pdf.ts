@@ -2,7 +2,7 @@ import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 import { registerThaiFont } from "./fonts/register";
 import { patchThaiMarkStacking } from "./fonts/thai-shape";
-import { numberToThaiBahtText } from "./utils";
+import { numberToThaiBahtText, formatDate } from "./utils";
 
 function addThaiFont(doc: jsPDF) {
   doc.setFont("helvetica");
@@ -12,10 +12,10 @@ function formatNum(n: number) {
   return new Intl.NumberFormat("th-TH", { minimumFractionDigits: 2 }).format(n);
 }
 
+// Delegates to the same dd/MM/yyyy (Gregorian) formatter used across the rest of the app,
+// so every document — on-screen and PDF — renders dates identically.
 function formatDateStr(d: Date | string | null | undefined) {
-  if (!d) return "-";
-  const dt = new Date(d);
-  return `${String(dt.getDate()).padStart(2, "0")}/${String(dt.getMonth() + 1).padStart(2, "0")}/${dt.getFullYear()}`;
+  return formatDate(d);
 }
 
 export function exportPurchaseOrderPDF(po: {
@@ -644,4 +644,164 @@ export function exportReceiptVoucherPDF(data: ReceiptVoucherData) {
   doc.text("วันที่: __________________", right - 65, y);
 
   doc.save(`RV_${data.receiptNumber}.pdf`);
+}
+
+const NOTE_TYPE_TITLE: Record<string, { th: string; en: string }> = {
+  DEBIT: { th: "ใบเพิ่มหนี้", en: "Debit Note" },
+  CREDIT: { th: "ใบลดหนี้", en: "Credit Note" },
+};
+
+export type DebitCreditNoteData = {
+  noteNumber: string;
+  type: "DEBIT" | "CREDIT";
+  noteDate: Date | string;
+  detail?: string | null;
+  reason?: string | null;
+  notes?: string | null;
+  createdByName?: string | null;
+  approvedByName?: string | null;
+  approvedAt?: Date | string | null;
+  createdAt: Date | string;
+  amount: number;
+  vatAmount: number;
+  totalAmount: number;
+  customer: { name: string; address?: string | null; taxId?: string | null };
+  invoice: { invoiceNumber: string; invoiceDate: Date | string; amount: number };
+};
+
+/** Real PDF (not window.print()), same Sarabun-embedded pattern as the WHT certificate and
+ * receipt voucher — avoids the browser print dialog's own header/footer (page title + URL)
+ * being stamped onto a document that must stand as an official tax record. */
+export function exportDebitCreditNotePDF(note: DebitCreditNoteData) {
+  const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
+  registerThaiFont(doc);
+  doc.setLineHeightFactor(1.5);
+  patchThaiMarkStacking(doc);
+  const lineHeightMM = (fontSizePt: number) =>
+    (fontSizePt / doc.internal.scaleFactor) * doc.getLineHeightFactor();
+
+  const left = 15;
+  const right = 195;
+  const width = right - left;
+  let y = 18;
+
+  const title = NOTE_TYPE_TITLE[note.type] ?? { th: note.type, en: note.type };
+  const sign = note.type === "DEBIT" ? "+" : "-";
+  const correctedInvoiceAmount = note.type === "DEBIT" ? note.invoice.amount + note.amount : note.invoice.amount - note.amount;
+
+  doc.setFont("Sarabun", "normal");
+  doc.setFontSize(9);
+  doc.text(COMPANY.name, left, y);
+  y += 4.5;
+  doc.text(COMPANY.address, left, y);
+  y += 4.5;
+  doc.text(`เลขประจำตัวผู้เสียภาษี ${COMPANY.taxId}`, left, y);
+
+  doc.setFont("Sarabun", "bold");
+  doc.setFontSize(17);
+  doc.text(title.th, right, 20, { align: "right" });
+  doc.setFontSize(9);
+  doc.text(title.en.toUpperCase(), right, 25, { align: "right" });
+  doc.setFont("Sarabun", "normal");
+  doc.setFontSize(9.5);
+  doc.text(`เลขที่ ${note.noteNumber}`, right, 30, { align: "right" });
+  doc.text(`วันที่ ${formatDateStr(note.noteDate)}`, right, 34.5, { align: "right" });
+
+  y = 39;
+  doc.setLineWidth(0.5);
+  doc.line(left, y, right, y);
+  y += 6;
+
+  doc.setFontSize(10);
+  doc.setFont("Sarabun", "bold");
+  doc.text("ลูกค้า", left, y);
+  doc.setFont("Sarabun", "normal");
+  doc.text(note.customer.name, left + 15, y);
+  y += 5;
+  if (note.customer.address) {
+    const addrLines = doc.splitTextToSize(note.customer.address, width / 2 - 4);
+    doc.text(addrLines, left + 15, y);
+    y += addrLines.length * lineHeightMM(9);
+  }
+  if (note.customer.taxId) {
+    doc.text(`เลขประจำตัวผู้เสียภาษี: ${note.customer.taxId}`, left + 15, y);
+    y += 5;
+  }
+
+  let yRight = 39 + 6;
+  doc.setFont("Sarabun", "bold");
+  doc.text("อ้างอิงใบกำกับภาษี", right - 70, yRight);
+  doc.setFont("Sarabun", "normal");
+  yRight += 5;
+  doc.text(`เลขที่: ${note.invoice.invoiceNumber}`, right - 70, yRight);
+  yRight += 5;
+  doc.text(`วันที่: ${formatDateStr(note.invoice.invoiceDate)}`, right - 70, yRight);
+  yRight += 5;
+  if (note.reason) {
+    const reasonLines = doc.splitTextToSize(`เหตุผล: ${note.reason}`, 70);
+    doc.text(reasonLines, right - 70, yRight);
+    yRight += reasonLines.length * lineHeightMM(9);
+  }
+
+  y = Math.max(y, yRight) + 3;
+
+  if (note.detail) {
+    doc.setFont("Sarabun", "bold");
+    doc.setFontSize(9.5);
+    doc.text("รายละเอียด", left, y);
+    y += 4.5;
+    doc.setFont("Sarabun", "normal");
+    const detailLines = doc.splitTextToSize(note.detail, width);
+    doc.text(detailLines, left, y);
+    y += detailLines.length * lineHeightMM(9.5) + 3;
+  }
+
+  // Value comparison table, required per มาตรา 86/9, 86/10 แห่งประมวลรัษฎากร
+  autoTable(doc, {
+    startY: y,
+    margin: { left, right: 15 },
+    body: [
+      ["มูลค่าใบกำกับภาษีฉบับเดิม (ก่อนภาษีมูลค่าเพิ่ม)", formatNum(note.invoice.amount)],
+      ["มูลค่าใบกำกับภาษีที่ถูกต้อง (ก่อนภาษีมูลค่าเพิ่ม)", formatNum(correctedInvoiceAmount)],
+      ["ผลต่าง", `${sign}${formatNum(note.amount)}`],
+      [`ยอดรวมมูลค่าใบ${note.type === "DEBIT" ? "เพิ่ม" : "ลด"}หนี้ (ก่อนภาษีมูลค่าเพิ่ม)`, `${sign}${formatNum(note.amount)}`],
+      ["ภาษีมูลค่าเพิ่ม", `${sign}${formatNum(note.vatAmount)}`],
+      [
+        { content: `จำนวนเงินรวมทั้งสิ้น (${note.type === "DEBIT" ? "เพิ่มหนี้" : "ลดหนี้"})`, styles: { fontStyle: "bold" } },
+        { content: `${sign}${formatNum(note.totalAmount)}`, styles: { fontStyle: "bold" } },
+      ],
+    ],
+    styles: { font: "Sarabun", fontSize: 9.5, cellPadding: 3, lineColor: 200, lineWidth: 0.2 },
+    columnStyles: { 0: { fillColor: [248, 250, 252] }, 1: { halign: "right", cellWidth: 45 } },
+  });
+
+  y = (doc as jsPDF & { lastAutoTable: { finalY: number } }).lastAutoTable.finalY + 6;
+
+  doc.setFontSize(9.5);
+  doc.setFont("Sarabun", "bold");
+  doc.text("จำนวนเงิน (ตัวอักษร)", left, y);
+  doc.setFont("Sarabun", "normal");
+  doc.text(numberToThaiBahtText(note.totalAmount), left + 32, y);
+  y += 8;
+
+  if (note.notes) {
+    doc.setFont("Sarabun", "bold");
+    doc.setFontSize(9);
+    doc.text("หมายเหตุ", left, y);
+    y += 4.5;
+    doc.setFont("Sarabun", "normal");
+    const notesLines = doc.splitTextToSize(note.notes, width);
+    doc.text(notesLines, left, y);
+    y += notesLines.length * lineHeightMM(9) + 3;
+  }
+
+  y += 12;
+  doc.setFontSize(9);
+  doc.text(`ผู้จัดทำ: ${note.createdByName ? note.createdByName : "__________________"}`, left, y);
+  doc.text(`ผู้อนุมัติ: ${note.approvedByName ? note.approvedByName : "__________________"}`, right - 65, y);
+  y += 5;
+  doc.text(`วันที่: ${note.createdAt ? formatDateStr(note.createdAt) : "__________________"}`, left, y);
+  doc.text(`วันที่: ${note.approvedAt ? formatDateStr(note.approvedAt) : "__________________"}`, right - 65, y);
+
+  doc.save(`${note.type === "DEBIT" ? "DBN" : "CRN"}_${note.noteNumber}.pdf`);
 }

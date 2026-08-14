@@ -1,5 +1,5 @@
 import { getPaymentPrep } from "@/actions/payment-prep";
-import { formatCurrency } from "@/lib/utils";
+import { formatCurrency, formatDate } from "@/lib/utils";
 import { notFound } from "next/navigation";
 import AutoPrint from "./PrintButton";
 
@@ -12,8 +12,9 @@ export default async function PaymentPrepPrintPage({
   const prep = await getPaymentPrep(id);
   if (!prep) notFound();
 
-  const fmt = (d: Date | null | undefined) =>
-    d ? new Intl.DateTimeFormat("th-TH", { day: "2-digit", month: "2-digit", year: "numeric", calendar: "gregory" }).format(new Date(d)) : null;
+  // Same dd/MM/yyyy (Gregorian) formatter used across the rest of the app, kept nullable
+  // here (unlike formatDate's own "-" fallback) so callers can still fall back to "..................." below.
+  const fmt = (d: Date | null | undefined) => (d ? formatDate(d) : null);
 
   const docDate = fmt(prep.createdAt);
   const createdDate = fmt(prep.createdAt);
@@ -38,7 +39,7 @@ export default async function PaymentPrepPrintPage({
               เลขประจำตัวผู้เสียภาษี 0205555008617
             </div>
             <div className="text-xs text-gray-600 mt-0.5">
-              โทร 033-650-796 &nbsp;|&nbsp; purchase@chemtech-th.com
+              โทร 033-650-796 &nbsp;|&nbsp; account@chemtech-th.com
             </div>
           </div>
 

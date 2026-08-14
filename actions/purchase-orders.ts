@@ -91,7 +91,7 @@ export async function getPurchaseOrder(id: string) {
 }
 
 export async function getNextPONumber() {
-  const year = String(new Date().getFullYear() + 543).slice(-2);
+  const year = String(new Date().getFullYear());
   const month = String(new Date().getMonth() + 1).padStart(2, "0");
   const prefix = `PO${year}${month}`;
   const last = await prisma.purchaseOrder.findFirst({
@@ -99,7 +99,7 @@ export async function getNextPONumber() {
     orderBy: { poNumber: "desc" },
   });
   const lastSeq = last ? parseInt(last.poNumber.slice(prefix.length)) : 0;
-  return `${prefix}${String(lastSeq + 1).padStart(4, "0")}`;
+  return `${prefix}${String(lastSeq + 1).padStart(3, "0")}`;
 }
 
 export async function createPurchaseOrder(data: {

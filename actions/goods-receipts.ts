@@ -149,7 +149,7 @@ export async function getApprovedPOsForGR() {
 // so count()+1 eventually re-lands on a still-existing GR...034 and the create fails
 // with a unique-constraint error).
 export async function getNextGRNumber() {
-  const year = String(new Date().getFullYear() + 543).slice(-2);
+  const year = String(new Date().getFullYear());
   const month = String(new Date().getMonth() + 1).padStart(2, "0");
   const prefix = `GR${year}${month}`;
   const last = await prisma.goodsReceipt.findFirst({
@@ -157,11 +157,11 @@ export async function getNextGRNumber() {
     orderBy: { grNumber: "desc" },
   });
   const lastSeq = last ? parseInt(last.grNumber.slice(prefix.length)) : 0;
-  return `${prefix}${String(lastSeq + 1).padStart(4, "0")}`;
+  return `${prefix}${String(lastSeq + 1).padStart(3, "0")}`;
 }
 
 async function getNextAPNumber(tx: Prisma.TransactionClient) {
-  const year = String(new Date().getFullYear() + 543).slice(-2);
+  const year = String(new Date().getFullYear());
   const month = String(new Date().getMonth() + 1).padStart(2, "0");
   const prefix = `AP${year}${month}`;
   const last = await tx.accountsPayable.findFirst({
@@ -169,7 +169,7 @@ async function getNextAPNumber(tx: Prisma.TransactionClient) {
     orderBy: { apNumber: "desc" },
   });
   const lastSeq = last ? parseInt(last.apNumber.slice(prefix.length)) : 0;
-  return `${prefix}${String(lastSeq + 1).padStart(4, "0")}`;
+  return `${prefix}${String(lastSeq + 1).padStart(3, "0")}`;
 }
 
 async function recomputePOStatus(tx: Prisma.TransactionClient, poId: string) {
