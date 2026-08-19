@@ -15,6 +15,27 @@ function computeDueDate(invoiceDate: Date, creditDays: number): Date {
   return due;
 }
 
+// `new Date(string)` is locale-ambiguous for slash-separated dates — it reads "12/05/2026"
+// as MM/DD/YYYY (US), silently swapping day and month for any DD/MM/YYYY input (the format
+// the rest of this app displays and the import UI instructs users to type when not using the
+// ISO example). Parse both supported formats explicitly instead of trusting the built-in parser.
+function parseImportDate(raw: string): Date | null {
+  const isoMatch = raw.match(/^(\d{4})-(\d{1,2})-(\d{1,2})$/);
+  if (isoMatch) {
+    const [, y, m, d] = isoMatch;
+    const date = new Date(Date.UTC(Number(y), Number(m) - 1, Number(d)));
+    return Number.isNaN(date.getTime()) ? null : date;
+  }
+  const dmyMatch = raw.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+  if (dmyMatch) {
+    const [, d, m, y] = dmyMatch;
+    const date = new Date(Date.UTC(Number(y), Number(m) - 1, Number(d)));
+    return Number.isNaN(date.getTime()) ? null : date;
+  }
+  const fallback = new Date(raw);
+  return Number.isNaN(fallback.getTime()) ? null : fallback;
+}
+
 /**
  * Postgres remains authoritative (ReceiptItem.invoiceId still holds a real FK into this
  * table's id), so every write dual-writes into the Google Sheet as a synced mirror. If the
@@ -201,8 +222,8 @@ export async function importSalesInvoicesCSV(rows: ImportRow[]) {
       errors.push(`แถว "${row.invoiceNumber || "?"}" : ต้องมีเลขที่ใบกำกับภาษี วันที่ และชื่อลูกค้า`);
       continue;
     }
-    const invoiceDate = new Date(row.invoiceDate);
-    if (Number.isNaN(invoiceDate.getTime())) {
+    const invoiceDate = parseImportDate(row.invoiceDate);
+    if (!invoiceDate) {
       errors.push(`เลขที่ใบกำกับภาษี ${row.invoiceNumber}: วันที่ไม่ถูกต้อง`);
       continue;
     }

@@ -213,7 +213,7 @@ export default function SalesInvoiceCsvImport() {
               <div className="bg-gray-50 rounded-lg px-4 py-3 text-xs text-gray-500">
                 <p className="font-semibold text-gray-600 mb-1">คอลัมน์ที่รองรับ</p>
                 <code className="font-mono break-all">วันที่ใบกำกับภาษี, เลขที่ใบกำกับภาษี, รายชื่อลูกค้า, ยอดก่อนภาษี, ภาษีมูลค่าเพิ่ม, ยอดรวม</code>
-                <p className="mt-1 text-gray-400">รูปแบบวันที่: YYYY-MM-DD (เช่น 2026-08-01)</p>
+                <p className="mt-1 text-gray-400">รูปแบบวันที่: YYYY-MM-DD (เช่น 2026-08-01) หรือ DD/MM/YYYY (เช่น 01/08/2026)</p>
               </div>
 
               {parseError && (
