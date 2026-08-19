@@ -854,12 +854,6 @@ export function exportDebitCreditNotePDF(note: DebitCreditNoteData) {
     ],
     styles: { font: "Sarabun", fontSize: 9, cellPadding: { top: 1.6, bottom: 1.6, left: 0, right: 0 }, textColor: GRAY_600 },
     columnStyles: { 0: { halign: "right" }, 1: { halign: "right", cellWidth: 45 } },
-    didParseCell: (data) => {
-      if (data.row.index === data.table.body.length - 1) {
-        data.cell.styles.lineWidth = { top: 0.3, bottom: 0, left: 0, right: 0 };
-        data.cell.styles.lineColor = GRAY_300;
-      }
-    },
   });
 
   y = (doc as jsPDF & { lastAutoTable: { finalY: number } }).lastAutoTable.finalY + 6;
