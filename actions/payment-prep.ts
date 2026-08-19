@@ -188,7 +188,7 @@ export async function createPaymentPrep(data: {
     for (const item of items) await syncAPStatus(tx, item.apId);
 
     return p;
-  });
+  }, { timeout: 20000 });
 
   await syncPrepToSheet(prep);
   await syncPrepItemsToSheet(prep.id, prep.items);
@@ -240,7 +240,7 @@ export async function updatePaymentPrep(
     for (const apId of affectedApIds) await syncAPStatus(tx, apId);
 
     return p;
-  });
+  }, { timeout: 20000 });
 
   await syncPrepToSheet(updated);
   await syncPrepItemsToSheet(id, updated.items);
@@ -306,7 +306,7 @@ export async function cancelPaymentPrep(id: string) {
     });
     for (const apId of apIds) await syncAPStatus(tx, apId);
     return p;
-  });
+  }, { timeout: 20000 });
 
   await syncPrepToSheet(updated);
   await syncAPsToSheetById(apIds);

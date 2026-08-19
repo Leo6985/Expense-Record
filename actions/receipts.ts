@@ -195,7 +195,7 @@ export async function createReceipt(data: ReceiptHeaderInput & { items: ReceiptI
     for (const item of items) await syncInvoiceStatus(tx, item.invoiceId);
 
     return r;
-  });
+  }, { timeout: 20000 });
 
   await syncReceiptToSheet(receipt);
   await syncReceiptItemsToSheet(receipt.id, receipt.items);
@@ -247,7 +247,7 @@ export async function updateReceipt(id: string, data: ReceiptHeaderInput & { ite
     for (const invoiceId of affectedInvoiceIds) await syncInvoiceStatus(tx, invoiceId);
 
     return r;
-  });
+  }, { timeout: 20000 });
 
   await syncReceiptToSheet(updated);
   await syncReceiptItemsToSheet(id, updated.items);
@@ -274,7 +274,7 @@ export async function approveReceipt(id: string) {
     });
     for (const item of existing.items) await syncInvoiceStatus(tx, item.invoiceId);
     return r;
-  });
+  }, { timeout: 20000 });
 
   await syncReceiptToSheet(receipt);
   await syncInvoicesToSheetById(existing.items.map((i) => i.invoiceId));
@@ -300,7 +300,7 @@ export async function unapproveReceipt(id: string) {
     });
     for (const item of existing.items) await syncInvoiceStatus(tx, item.invoiceId);
     return r;
-  });
+  }, { timeout: 20000 });
 
   await syncReceiptToSheet(receipt);
   await syncInvoicesToSheetById(existing.items.map((i) => i.invoiceId));
@@ -320,7 +320,7 @@ export async function cancelReceipt(id: string) {
     const r = await tx.receipt.update({ where: { id }, data: { status: "CANCELLED" } });
     for (const invoiceId of invoiceIds) await syncInvoiceStatus(tx, invoiceId);
     return r;
-  });
+  }, { timeout: 20000 });
 
   await syncReceiptToSheet(receipt);
   await syncInvoicesToSheetById(invoiceIds);
@@ -343,7 +343,7 @@ export async function deleteReceipt(id: string) {
   await prisma.$transaction(async (tx) => {
     await tx.receipt.delete({ where: { id } });
     for (const invoiceId of invoiceIds) await syncInvoiceStatus(tx, invoiceId);
-  });
+  }, { timeout: 20000 });
 
   try {
     await receiptItemsTable.deleteWhere((r) => r.receiptId === id);
