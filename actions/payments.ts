@@ -169,7 +169,7 @@ export async function createPayment(data: {
     for (const apId of apIds) await syncAPStatus(tx, apId);
 
     return { payment: p, prep };
-  }, { timeout: 20000 });
+  }, { timeout: 60000 });
 
   await syncPaymentToSheet(result.payment);
   await syncPrepToSheet(result.prep);
@@ -202,7 +202,7 @@ export async function deletePayment(id: string) {
     });
     for (const apId of apIds) await syncAPStatus(tx, apId);
     return p;
-  }, { timeout: 20000 });
+  }, { timeout: 60000 });
 
   await paymentsTable.delete(id);
   await syncPrepToSheet(prep);
