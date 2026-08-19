@@ -16,7 +16,6 @@ export default async function DebitCreditNotePrintPage({
     noteNumber: note.noteNumber,
     type: note.type as "DEBIT" | "CREDIT",
     noteDate: note.noteDate,
-    detail: note.detail,
     reason: note.reason,
     notes: note.notes,
     createdByName: note.createdByName,
@@ -34,7 +33,6 @@ export default async function DebitCreditNotePrintPage({
     invoice: {
       invoiceNumber: note.invoice.invoiceNumber,
       invoiceDate: note.invoice.invoiceDate,
-      amount: note.invoice.amount,
     },
   };
 

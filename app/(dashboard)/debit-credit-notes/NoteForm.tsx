@@ -10,7 +10,6 @@ type Invoice = {
   id: string;
   invoiceNumber: string;
   invoiceDate: Date;
-  amount: number;
   totalAmount: number;
   status: string;
   customer: { name: string };
@@ -29,7 +28,6 @@ export type NoteFormInitial = {
   amount: string;
   vatAmount: string;
   reason: string;
-  detail: string;
   notes: string;
 };
 
@@ -40,7 +38,6 @@ export type NoteFormValues = {
   amount: number;
   vatAmount?: number;
   reason?: string;
-  detail?: string;
   notes?: string;
 };
 
@@ -75,7 +72,6 @@ export default function NoteForm({
   const [amount, setAmount] = useState(initialValues?.amount ?? "");
   const [vatAmount, setVatAmount] = useState(initialValues?.vatAmount ?? "0");
   const [reason, setReason] = useState(initialValues?.reason ?? "");
-  const [detail, setDetail] = useState(initialValues?.detail ?? "");
   const [notes, setNotes] = useState(initialValues?.notes ?? "");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -97,10 +93,6 @@ export default function NoteForm({
   const amountNum = parseFloat(amount || "0") || 0;
   const vatAmountNum = parseFloat(vatAmount || "0") || 0;
   const totalAmount = Math.round((amountNum + vatAmountNum) * 100) / 100;
-  const originalInvoiceAmount = selectedInvoice?.amount ?? 0;
-  const correctedInvoiceAmount =
-    type === "DEBIT" ? originalInvoiceAmount + amountNum : originalInvoiceAmount - amountNum;
-  const difference = correctedInvoiceAmount - originalInvoiceAmount;
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -122,7 +114,6 @@ export default function NoteForm({
         amount: amountNum,
         vatAmount: vatAmountNum || undefined,
         reason: reason || undefined,
-        detail: detail || undefined,
         notes: notes || undefined,
       });
     } catch (err) {
@@ -254,20 +245,8 @@ export default function NoteForm({
                 className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
               />
             </div>
-            <div className="col-span-2">
-              <label className="block text-sm font-medium text-gray-700 mb-1">รายละเอียด</label>
-              <textarea
-                value={detail}
-                onChange={(e) => setDetail(e.target.value)}
-                rows={3}
-                placeholder="รายละเอียดรายการที่เพิ่ม/ลดหนี้ เช่น รายการสินค้า จำนวน สาเหตุ (จะแสดงบนเอกสารที่พิมพ์)"
-                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-              />
-            </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                ยอดรวมมูลค่าใบ{type === "DEBIT" ? "เพิ่ม" : "ลด"}หนี้ (ก่อนภาษีมูลค่าเพิ่ม) *
-              </label>
+              <label className="block text-sm font-medium text-gray-700 mb-1">ยอดก่อน VAT *</label>
               <input
                 type="number"
                 min="0"
@@ -279,7 +258,7 @@ export default function NoteForm({
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">ภาษีมูลค่าเพิ่ม</label>
+              <label className="block text-sm font-medium text-gray-700 mb-1">VAT</label>
               <input
                 type="number"
                 min="0"
@@ -299,34 +278,10 @@ export default function NoteForm({
             </div>
           </div>
           <div className="mt-4 pt-4 border-t border-gray-100 flex justify-between font-bold text-blue-700 text-base">
-            <span>จำนวนเงินรวมทั้งสิ้น (หลังภาษีมูลค่าเพิ่ม)</span>
+            <span>รวมทั้งสิ้น</span>
             <span>฿{formatCurrency(totalAmount)}</span>
           </div>
         </div>
-
-        {selectedInvoice && (
-          <div className="bg-white rounded-xl border border-gray-200 p-5">
-            <h2 className="font-semibold text-gray-900 mb-4 pb-2 border-b border-gray-100">
-              สรุปมูลค่าตามใบกำกับภาษี (ตามมาตรา 86/9, 86/10)
-            </h2>
-            <div className="space-y-2 text-sm">
-              <div className="flex justify-between text-gray-600">
-                <span>มูลค่าใบกำกับภาษีฉบับเดิม (ก่อนภาษีมูลค่าเพิ่ม)</span>
-                <span>฿{formatCurrency(originalInvoiceAmount)}</span>
-              </div>
-              <div className="flex justify-between text-gray-600">
-                <span>มูลค่าใบกำกับภาษีที่ถูกต้อง (ก่อนภาษีมูลค่าเพิ่ม)</span>
-                <span>฿{formatCurrency(correctedInvoiceAmount)}</span>
-              </div>
-              <div className="flex justify-between font-medium text-gray-900 border-t border-gray-100 pt-2">
-                <span>ผลต่าง</span>
-                <span className={type === "DEBIT" ? "text-orange-700" : "text-teal-700"}>
-                  {type === "DEBIT" ? "+" : "-"}฿{formatCurrency(Math.abs(difference))}
-                </span>
-              </div>
-            </div>
-          </div>
-        )}
 
         {error && (
           <div className="bg-red-50 border border-red-200 text-red-700 rounded-lg px-4 py-3 text-sm">{error}</div>

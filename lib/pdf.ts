@@ -655,7 +655,6 @@ export type DebitCreditNoteData = {
   noteNumber: string;
   type: "DEBIT" | "CREDIT";
   noteDate: Date | string;
-  detail?: string | null;
   reason?: string | null;
   notes?: string | null;
   createdByName?: string | null;
@@ -666,7 +665,7 @@ export type DebitCreditNoteData = {
   vatAmount: number;
   totalAmount: number;
   customer: { name: string; address?: string | null; taxId?: string | null };
-  invoice: { invoiceNumber: string; invoiceDate: Date | string; amount: number };
+  invoice: { invoiceNumber: string; invoiceDate: Date | string };
 };
 
 /** Real PDF (not window.print()), same Sarabun-embedded pattern as the WHT certificate and
@@ -687,7 +686,6 @@ export function exportDebitCreditNotePDF(note: DebitCreditNoteData) {
 
   const title = NOTE_TYPE_TITLE[note.type] ?? { th: note.type, en: note.type };
   const sign = note.type === "DEBIT" ? "+" : "-";
-  const correctedInvoiceAmount = note.type === "DEBIT" ? note.invoice.amount + note.amount : note.invoice.amount - note.amount;
 
   doc.setFont("Sarabun", "normal");
   doc.setFontSize(9);
@@ -745,29 +743,14 @@ export function exportDebitCreditNotePDF(note: DebitCreditNoteData) {
 
   y = Math.max(y, yRight) + 3;
 
-  if (note.detail) {
-    doc.setFont("Sarabun", "bold");
-    doc.setFontSize(9.5);
-    doc.text("รายละเอียด", left, y);
-    y += 4.5;
-    doc.setFont("Sarabun", "normal");
-    const detailLines = doc.splitTextToSize(note.detail, width);
-    doc.text(detailLines, left, y);
-    y += detailLines.length * lineHeightMM(9.5) + 3;
-  }
-
-  // Value comparison table, required per มาตรา 86/9, 86/10 แห่งประมวลรัษฎากร
   autoTable(doc, {
     startY: y,
     margin: { left, right: 15 },
     body: [
-      ["มูลค่าใบกำกับภาษีฉบับเดิม (ก่อนภาษีมูลค่าเพิ่ม)", formatNum(note.invoice.amount)],
-      ["มูลค่าใบกำกับภาษีที่ถูกต้อง (ก่อนภาษีมูลค่าเพิ่ม)", formatNum(correctedInvoiceAmount)],
-      ["ผลต่าง", `${sign}${formatNum(note.amount)}`],
-      [`ยอดรวมมูลค่าใบ${note.type === "DEBIT" ? "เพิ่ม" : "ลด"}หนี้ (ก่อนภาษีมูลค่าเพิ่ม)`, `${sign}${formatNum(note.amount)}`],
-      ["ภาษีมูลค่าเพิ่ม", `${sign}${formatNum(note.vatAmount)}`],
+      ["ยอดก่อน VAT", formatNum(note.amount)],
+      ["VAT", formatNum(note.vatAmount)],
       [
-        { content: `จำนวนเงินรวมทั้งสิ้น (${note.type === "DEBIT" ? "เพิ่มหนี้" : "ลดหนี้"})`, styles: { fontStyle: "bold" } },
+        { content: `รวมทั้งสิ้น (${note.type === "DEBIT" ? "เพิ่มหนี้" : "ลดหนี้"})`, styles: { fontStyle: "bold" } },
         { content: `${sign}${formatNum(note.totalAmount)}`, styles: { fontStyle: "bold" } },
       ],
     ],
