@@ -215,6 +215,8 @@ const COMPANY = {
   name: "บริษัท เคมเทค อินโนเวชั่น จำกัด",
   address: "333/37 หมู่ 2 ต.มาบยางพร อ.ปลวกแดง จ.ระยอง 21140",
   taxId: "0205555008617",
+  phone: "033-650-796",
+  email: "account@chemtech-th.com",
 };
 
 const PND_OPTIONS = ["ภ.ง.ด.1ก", "ภ.ง.ด.1ก พิเศษ", "ภ.ง.ด.2", "ภ.ง.ด.3", "ภ.ง.ด.2ก", "ภ.ง.ด.3ก", "ภ.ง.ด.53"];
@@ -669,13 +671,24 @@ export type DebitCreditNoteData = {
   invoice: { invoiceNumber: string; invoiceDate: Date | string; amount: number };
 };
 
+const GRAY_900: [number, number, number] = [17, 24, 39];
+const GRAY_700: [number, number, number] = [55, 65, 81];
+const GRAY_600: [number, number, number] = [75, 85, 99];
+const GRAY_500: [number, number, number] = [107, 114, 128];
+const GRAY_400: [number, number, number] = [156, 163, 175];
+const GRAY_300: [number, number, number] = [209, 213, 219];
+const BLUE_700: [number, number, number] = [29, 78, 216];
+const ORANGE_700: [number, number, number] = [194, 65, 12];
+const TEAL_700: [number, number, number] = [15, 118, 110];
+
 /** Real PDF (not window.print()), same Sarabun-embedded pattern as the WHT certificate and
  * receipt voucher — avoids the browser print dialog's own header/footer (page title + URL)
- * being stamped onto a document that must stand as an official tax record. */
+ * being stamped onto a document that must stand as an official tax record. Laid out to match
+ * the app's bordered-card print style (see purchase-orders/payment-prep print pages). */
 export function exportDebitCreditNotePDF(note: DebitCreditNoteData) {
   const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
   registerThaiFont(doc);
-  doc.setLineHeightFactor(1.5);
+  doc.setLineHeightFactor(1.4);
   patchThaiMarkStacking(doc);
   const lineHeightMM = (fontSizePt: number) =>
     (fontSizePt / doc.internal.scaleFactor) * doc.getLineHeightFactor();
@@ -683,83 +696,151 @@ export function exportDebitCreditNotePDF(note: DebitCreditNoteData) {
   const left = 15;
   const right = 195;
   const width = right - left;
-  let y = 18;
+  let y = 20;
 
   const title = NOTE_TYPE_TITLE[note.type] ?? { th: note.type, en: note.type };
   const sign = note.type === "DEBIT" ? "+" : "-";
+  const totalColor = note.type === "DEBIT" ? ORANGE_700 : TEAL_700;
   const correctedInvoiceAmount = note.type === "DEBIT" ? note.invoice.amount + note.amount : note.invoice.amount - note.amount;
 
-  doc.setFont("Sarabun", "normal");
-  doc.setFontSize(9);
+  // Header: company left, document title right
+  doc.setTextColor(...GRAY_900);
+  doc.setFont("Sarabun", "bold");
+  doc.setFontSize(11);
   doc.text(COMPANY.name, left, y);
+  doc.setFont("Sarabun", "normal");
+  doc.setFontSize(8);
+  doc.setTextColor(...GRAY_600);
   y += 4.5;
   doc.text(COMPANY.address, left, y);
-  y += 4.5;
+  y += 4;
   doc.text(`เลขประจำตัวผู้เสียภาษี ${COMPANY.taxId}`, left, y);
+  y += 4;
+  doc.text(`โทร ${COMPANY.phone}  |  ${COMPANY.email}`, left, y);
 
+  doc.setTextColor(...GRAY_900);
   doc.setFont("Sarabun", "bold");
-  doc.setFontSize(17);
-  doc.text(title.th, right, 20, { align: "right" });
-  doc.setFontSize(9);
-  doc.text(title.en.toUpperCase(), right, 25, { align: "right" });
+  doc.setFontSize(18);
+  doc.text(title.th, right, 21, { align: "right" });
   doc.setFont("Sarabun", "normal");
+  doc.setFontSize(9);
+  doc.setTextColor(...GRAY_500);
+  doc.text(title.en, right, 26, { align: "right" });
   doc.setFontSize(9.5);
-  doc.text(`เลขที่ ${note.noteNumber}`, right, 30, { align: "right" });
-  doc.text(`วันที่ ${formatDateStr(note.noteDate)}`, right, 34.5, { align: "right" });
+  doc.text("เลขที่ ", right - doc.getTextWidth(note.noteNumber) - 1, 32, { align: "right" });
+  doc.setFont("Sarabun", "bold");
+  doc.setTextColor(...BLUE_700);
+  doc.text(note.noteNumber, right, 32, { align: "right" });
+  doc.setFont("Sarabun", "normal");
+  doc.setTextColor(...GRAY_500);
+  doc.text("วันที่ ", right - doc.getTextWidth(formatDateStr(note.noteDate)) - 1, 37, { align: "right" });
+  doc.setFont("Sarabun", "normal");
+  doc.setTextColor(...GRAY_900);
+  doc.text(formatDateStr(note.noteDate), right, 37, { align: "right" });
 
-  y = 39;
+  y = 42;
+  doc.setDrawColor(...GRAY_900);
   doc.setLineWidth(0.5);
   doc.line(left, y, right, y);
   y += 6;
 
-  doc.setFontSize(10);
-  doc.setFont("Sarabun", "bold");
-  doc.text("ลูกค้า", left, y);
+  // Customer & invoice-reference cards
+  const gap = 6;
+  const boxW = (width - gap) / 2;
+  const rightBoxX = left + boxW + gap;
+  const padX = 4;
+  const padTop = 5;
+
   doc.setFont("Sarabun", "normal");
-  doc.text(note.customer.name, left + 15, y);
-  y += 5;
-  if (note.customer.address) {
-    const addrLines = doc.splitTextToSize(note.customer.address, width / 2 - 4);
-    doc.text(addrLines, left + 15, y);
-    y += addrLines.length * lineHeightMM(9);
+  doc.setFontSize(9);
+  const addrLines = note.customer.address ? doc.splitTextToSize(note.customer.address, boxW - padX * 2) : [];
+  let leftContentH = padTop + 4 + 4.5 + (addrLines.length ? addrLines.length * lineHeightMM(8.5) : 0) + (note.customer.taxId ? 4 : 0) + 4;
+
+  const refRows = 2 + (note.reason ? 1 : 0);
+  const reasonLines = note.reason ? doc.splitTextToSize(note.reason, boxW - padX * 2) : [];
+  let rightContentH = padTop + 4 + refRows * 5 + (note.reason ? (reasonLines.length - 1) * lineHeightMM(8.5) : 0) + 4;
+
+  const boxH = Math.max(leftContentH, rightContentH, 26);
+
+  doc.setDrawColor(...GRAY_300);
+  doc.setLineWidth(0.3);
+  doc.roundedRect(left, y, boxW, boxH, 2, 2, "S");
+  doc.roundedRect(rightBoxX, y, boxW, boxH, 2, 2, "S");
+
+  let ly = y + padTop;
+  doc.setFontSize(7.5);
+  doc.setTextColor(...GRAY_400);
+  doc.text("ลูกค้า", left + padX, ly);
+  ly += 4;
+  doc.setFont("Sarabun", "bold");
+  doc.setFontSize(9.5);
+  doc.setTextColor(...GRAY_900);
+  doc.text(note.customer.name, left + padX, ly);
+  ly += 4.5;
+  doc.setFont("Sarabun", "normal");
+  doc.setFontSize(8.5);
+  doc.setTextColor(...GRAY_600);
+  if (addrLines.length) {
+    doc.text(addrLines, left + padX, ly);
+    ly += addrLines.length * lineHeightMM(8.5);
   }
   if (note.customer.taxId) {
-    doc.text(`เลขประจำตัวผู้เสียภาษี: ${note.customer.taxId}`, left + 15, y);
-    y += 5;
+    doc.setTextColor(...GRAY_500);
+    doc.text(`เลขประจำตัวผู้เสียภาษี: ${note.customer.taxId}`, left + padX, ly);
   }
 
-  let yRight = 39 + 6;
-  doc.setFont("Sarabun", "bold");
-  doc.text("อ้างอิงใบกำกับภาษี", right - 70, yRight);
-  doc.setFont("Sarabun", "normal");
-  yRight += 5;
-  doc.text(`เลขที่: ${note.invoice.invoiceNumber}`, right - 70, yRight);
-  yRight += 5;
-  doc.text(`วันที่: ${formatDateStr(note.invoice.invoiceDate)}`, right - 70, yRight);
-  yRight += 5;
-  if (note.reason) {
-    const reasonLines = doc.splitTextToSize(`เหตุผล: ${note.reason}`, 70);
-    doc.text(reasonLines, right - 70, yRight);
-    yRight += reasonLines.length * lineHeightMM(9);
-  }
-
-  y = Math.max(y, yRight) + 3;
-
-  if (note.detail) {
-    doc.setFont("Sarabun", "bold");
-    doc.setFontSize(9.5);
-    doc.text("รายละเอียด", left, y);
-    y += 4.5;
+  let ry = y + padTop;
+  doc.setFontSize(7.5);
+  doc.setTextColor(...GRAY_400);
+  doc.text("อ้างอิงใบกำกับภาษี", rightBoxX + padX, ry);
+  ry += 4;
+  doc.setFontSize(8.5);
+  const refRow = (labelText: string, valueText: string, bold?: boolean) => {
     doc.setFont("Sarabun", "normal");
-    const detailLines = doc.splitTextToSize(note.detail, width);
-    doc.text(detailLines, left, y);
-    y += detailLines.length * lineHeightMM(9.5) + 3;
+    doc.setTextColor(...GRAY_500);
+    doc.text(labelText, rightBoxX + padX, ry);
+    doc.setFont("Sarabun", bold ? "bold" : "normal");
+    doc.setTextColor(...GRAY_700);
+    doc.text(valueText, rightBoxX + boxW - padX, ry, { align: "right" });
+    ry += 5;
+  };
+  refRow("เลขที่ใบกำกับภาษี", note.invoice.invoiceNumber, true);
+  refRow("วันที่ใบกำกับภาษี", formatDateStr(note.invoice.invoiceDate));
+  if (note.reason) {
+    doc.setFont("Sarabun", "normal");
+    doc.setTextColor(...GRAY_500);
+    doc.text("เหตุผล", rightBoxX + padX, ry);
+    doc.setTextColor(...GRAY_700);
+    doc.text(reasonLines, rightBoxX + padX, ry + 4);
   }
 
-  // Value comparison table, required per มาตรา 86/9, 86/10 แห่งประมวลรัษฎากร
+  y += boxH + 6;
+
+  // Detail box (always shown, matching the on-screen/print card layout)
+  doc.setFont("Sarabun", "bold");
+  doc.setFontSize(9);
+  doc.setTextColor(...GRAY_700);
+  doc.text("รายละเอียด", left, y);
+  doc.setDrawColor(...GRAY_300);
+  doc.line(left, y + 1.5, right, y + 1.5);
+  y += 5;
+
+  doc.setFont("Sarabun", "normal");
+  doc.setFontSize(9);
+  doc.setTextColor(...GRAY_700);
+  const detailLines = doc.splitTextToSize(note.detail || "-", width - padX * 2);
+  const detailBoxH = Math.max(detailLines.length * lineHeightMM(9) + padTop, 14);
+  doc.setDrawColor(...GRAY_300);
+  doc.roundedRect(left, y, width, detailBoxH, 2, 2, "S");
+  doc.text(detailLines, left + padX, y + padTop);
+  y += detailBoxH + 6;
+
+  // Value comparison table, required per มาตรา 86/9, 86/10 แห่งประมวลรัษฎากร — plain rows,
+  // no grid lines, matching the on-screen card's flat list style.
   autoTable(doc, {
     startY: y,
     margin: { left, right: 15 },
+    theme: "plain",
     body: [
       ["มูลค่าใบกำกับภาษีฉบับเดิม (ก่อนภาษีมูลค่าเพิ่ม)", formatNum(note.invoice.amount)],
       ["มูลค่าใบกำกับภาษีที่ถูกต้อง (ก่อนภาษีมูลค่าเพิ่ม)", formatNum(correctedInvoiceAmount)],
@@ -767,18 +848,25 @@ export function exportDebitCreditNotePDF(note: DebitCreditNoteData) {
       [`ยอดรวมมูลค่าใบ${note.type === "DEBIT" ? "เพิ่ม" : "ลด"}หนี้ (ก่อนภาษีมูลค่าเพิ่ม)`, `${sign}${formatNum(note.amount)}`],
       ["ภาษีมูลค่าเพิ่ม", `${sign}${formatNum(note.vatAmount)}`],
       [
-        { content: `จำนวนเงินรวมทั้งสิ้น (${note.type === "DEBIT" ? "เพิ่มหนี้" : "ลดหนี้"})`, styles: { fontStyle: "bold" } },
-        { content: `${sign}${formatNum(note.totalAmount)}`, styles: { fontStyle: "bold" } },
+        { content: `จำนวนเงินรวมทั้งสิ้น (${note.type === "DEBIT" ? "เพิ่มหนี้" : "ลดหนี้"})`, styles: { fontStyle: "bold", textColor: totalColor } },
+        { content: `${sign}${formatNum(note.totalAmount)}`, styles: { fontStyle: "bold", textColor: totalColor, fontSize: 10.5 } },
       ],
     ],
-    styles: { font: "Sarabun", fontSize: 9.5, cellPadding: 3, lineColor: 200, lineWidth: 0.2 },
-    columnStyles: { 0: { fillColor: [248, 250, 252] }, 1: { halign: "right", cellWidth: 45 } },
+    styles: { font: "Sarabun", fontSize: 9, cellPadding: { top: 1.6, bottom: 1.6, left: 0, right: 0 }, textColor: GRAY_600 },
+    columnStyles: { 0: { halign: "right" }, 1: { halign: "right", cellWidth: 45 } },
+    didParseCell: (data) => {
+      if (data.row.index === data.table.body.length - 1) {
+        data.cell.styles.lineWidth = { top: 0.3, bottom: 0, left: 0, right: 0 };
+        data.cell.styles.lineColor = GRAY_300;
+      }
+    },
   });
 
   y = (doc as jsPDF & { lastAutoTable: { finalY: number } }).lastAutoTable.finalY + 6;
 
-  doc.setFontSize(9.5);
+  doc.setFontSize(9);
   doc.setFont("Sarabun", "bold");
+  doc.setTextColor(...GRAY_700);
   doc.text("จำนวนเงิน (ตัวอักษร)", left, y);
   doc.setFont("Sarabun", "normal");
   doc.text(numberToThaiBahtText(note.totalAmount), left + 32, y);
@@ -790,18 +878,37 @@ export function exportDebitCreditNotePDF(note: DebitCreditNoteData) {
     doc.text("หมายเหตุ", left, y);
     y += 4.5;
     doc.setFont("Sarabun", "normal");
+    doc.setTextColor(...GRAY_600);
     const notesLines = doc.splitTextToSize(note.notes, width);
     doc.text(notesLines, left, y);
     y += notesLines.length * lineHeightMM(9) + 3;
   }
 
-  y += 12;
-  doc.setFontSize(9);
-  doc.text(`ผู้จัดทำ: ${note.createdByName ? note.createdByName : "__________________"}`, left, y);
-  doc.text(`ผู้อนุมัติ: ${note.approvedByName ? note.approvedByName : "__________________"}`, right - 65, y);
+  // Signature block: line above, role label, name, date — centered under each line
+  y = Math.max(y + 12, 250);
+  const colCenters = [left + width * 0.25, left + width * 0.75];
+  const lineHalfW = 30;
+  doc.setDrawColor(...GRAY_400);
+  doc.setLineWidth(0.4);
+  for (const cx of colCenters) doc.line(cx - lineHalfW, y, cx + lineHalfW, y);
+
   y += 5;
-  doc.text(`วันที่: ${note.createdAt ? formatDateStr(note.createdAt) : "__________________"}`, left, y);
-  doc.text(`วันที่: ${note.approvedAt ? formatDateStr(note.approvedAt) : "__________________"}`, right - 65, y);
+  doc.setFont("Sarabun", "normal");
+  doc.setFontSize(9);
+  doc.setTextColor(...GRAY_600);
+  doc.text("ผู้จัดทำ", colCenters[0], y, { align: "center" });
+  doc.text("ผู้อนุมัติ", colCenters[1], y, { align: "center" });
+
+  y += 5;
+  doc.setTextColor(...GRAY_900);
+  doc.text(note.createdByName || "................................", colCenters[0], y, { align: "center" });
+  doc.text(note.approvedByName || "................................", colCenters[1], y, { align: "center" });
+
+  y += 4.5;
+  doc.setFontSize(8);
+  doc.setTextColor(...GRAY_500);
+  doc.text(note.createdAt ? formatDateStr(note.createdAt) : "...................", colCenters[0], y, { align: "center" });
+  doc.text(note.approvedAt ? formatDateStr(note.approvedAt) : "...................", colCenters[1], y, { align: "center" });
 
   doc.save(`${note.type === "DEBIT" ? "DBN" : "CRN"}_${note.noteNumber}.pdf`);
 }
