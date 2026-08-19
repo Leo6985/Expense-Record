@@ -50,17 +50,15 @@ export async function syncAPToSheet(ap: {
 
 /** Re-fetches each AP by id from Postgres and syncs its current state to the Sheet.
  * Use after a transaction that may have changed AP status via syncAPStatus() below.
- * Runs in parallel — sequentially this was N full-tab-read-then-write round trips to the
- * Sheets API (each ~1-2s), which scaled linearly with item count and could push a prep/payment
- * with several AP items past the server's request timeout. */
+ * Fetches all APs in one query (not N parallel connections — Prisma's default pool size,
+ * e.g. 3 on a 1-vCPU serverless function, was being exhausted once a prep/payment covered
+ * more APs than the pool, surfacing as a generic Server Components render error), then
+ * syncs each to the Sheet in parallel — that part only hits the Sheets API, not Postgres. */
 export async function syncAPsToSheetById(apIds: string[]) {
   const uniqueIds = Array.from(new Set(apIds));
-  await Promise.all(
-    uniqueIds.map(async (id) => {
-      const ap = await prisma.accountsPayable.findUnique({ where: { id } });
-      if (ap) await syncAPToSheet(ap);
-    })
-  );
+  if (uniqueIds.length === 0) return;
+  const aps = await prisma.accountsPayable.findMany({ where: { id: { in: uniqueIds } } });
+  await Promise.all(aps.map((ap) => syncAPToSheet(ap)));
 }
 
 // Sums how much of an AP's totalAmount has been committed to non-cancelled payment

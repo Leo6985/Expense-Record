@@ -51,17 +51,15 @@ export async function syncInvoiceToSheet(invoice: {
 
 /** Re-fetches each invoice by id from Postgres and syncs its current state to the Sheet.
  * Use after a transaction that may have changed invoice status via syncInvoiceStatus() below.
- * Runs in parallel — sequentially this was N full-tab-read-then-write round trips to the
- * Sheets API (each ~1-2s), which scaled linearly with item count and could push a receipt
- * with several invoices past the server's request timeout. */
+ * Fetches all invoices in one query (not N parallel connections — Prisma's default pool
+ * size, e.g. 3 on a 1-vCPU serverless function, was being exhausted once a receipt covered
+ * more invoices than the pool, surfacing as a generic Server Components render error), then
+ * syncs each to the Sheet in parallel — that part only hits the Sheets API, not Postgres. */
 export async function syncInvoicesToSheetById(invoiceIds: string[]) {
   const uniqueIds = Array.from(new Set(invoiceIds));
-  await Promise.all(
-    uniqueIds.map(async (id) => {
-      const invoice = await prisma.salesInvoice.findUnique({ where: { id } });
-      if (invoice) await syncInvoiceToSheet(invoice);
-    })
-  );
+  if (uniqueIds.length === 0) return;
+  const invoices = await prisma.salesInvoice.findMany({ where: { id: { in: uniqueIds } } });
+  await Promise.all(invoices.map((invoice) => syncInvoiceToSheet(invoice)));
 }
 
 // Sums how much of an invoice's effective total (totalAmount adjusted by any APPROVED debit/
