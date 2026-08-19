@@ -51,6 +51,8 @@ export default function DebitCreditNoteDetailPage() {
 
   const s = statusConfig[note.status] ?? { label: note.status, color: "bg-gray-100 text-gray-700" };
   const t = typeConfig[note.type] ?? { label: note.type, color: "bg-gray-100 text-gray-700" };
+  const correctedInvoiceAmount =
+    note.type === "DEBIT" ? note.invoice.amount + note.amount : note.invoice.amount - note.amount;
 
   async function handleApprove() {
     if (!confirm("ยืนยันการอนุมัติรายการนี้?")) return;
@@ -152,7 +154,35 @@ export default function DebitCreditNoteDetailPage() {
           {note.reason && <InfoRow label="เหตุผล" value={note.reason} />}
           <InfoRow label="ผู้จัดทำ" value={note.createdByName ?? "-"} />
           <InfoRow label="ผู้อนุมัติ" value={note.approvedByName ?? "-"} />
+          {note.detail && (
+            <div className="col-span-2">
+              <div className="text-xs text-gray-500 mb-0.5">รายละเอียด</div>
+              <div className="font-medium text-gray-900 whitespace-pre-wrap">{note.detail}</div>
+            </div>
+          )}
           {note.notes && <InfoRow label="หมายเหตุ" value={note.notes} />}
+        </div>
+      </div>
+
+      <div className="bg-white rounded-xl border border-gray-200 p-5 mb-5">
+        <h2 className="font-semibold text-gray-900 mb-4 pb-2 border-b border-gray-100">
+          สรุปมูลค่าตามใบกำกับภาษี (ตามมาตรา 86/9, 86/10)
+        </h2>
+        <div className="space-y-2 text-sm">
+          <div className="flex justify-between text-gray-600">
+            <span>มูลค่าใบกำกับภาษีฉบับเดิม (ก่อนภาษีมูลค่าเพิ่ม)</span>
+            <span>฿{formatCurrency(note.invoice.amount)}</span>
+          </div>
+          <div className="flex justify-between text-gray-600">
+            <span>มูลค่าใบกำกับภาษีที่ถูกต้อง (ก่อนภาษีมูลค่าเพิ่ม)</span>
+            <span>฿{formatCurrency(correctedInvoiceAmount)}</span>
+          </div>
+          <div className="flex justify-between font-medium text-gray-900 border-t border-gray-100 pt-2">
+            <span>ผลต่าง</span>
+            <span className={note.type === "DEBIT" ? "text-orange-700" : "text-teal-700"}>
+              {note.type === "DEBIT" ? "+" : "-"}฿{formatCurrency(note.amount)}
+            </span>
+          </div>
         </div>
       </div>
 
@@ -160,15 +190,15 @@ export default function DebitCreditNoteDetailPage() {
         <h2 className="font-semibold text-gray-900 mb-4 pb-2 border-b border-gray-100">จำนวนเงิน</h2>
         <div className="space-y-2 text-sm">
           <div className="flex justify-between text-gray-600">
-            <span>ยอดก่อน VAT</span>
+            <span>ยอดรวมมูลค่าใบ{note.type === "DEBIT" ? "เพิ่ม" : "ลด"}หนี้ (ก่อนภาษีมูลค่าเพิ่ม)</span>
             <span>฿{formatCurrency(note.amount)}</span>
           </div>
           <div className="flex justify-between text-gray-600">
-            <span>VAT</span>
+            <span>ภาษีมูลค่าเพิ่ม</span>
             <span>฿{formatCurrency(note.vatAmount)}</span>
           </div>
           <div className="flex justify-between font-bold text-gray-900 text-lg border-t border-gray-200 pt-3 mt-2">
-            <span>รวมทั้งสิ้น</span>
+            <span>จำนวนเงินรวมทั้งสิ้น (หลังภาษีมูลค่าเพิ่ม)</span>
             <span className={note.type === "DEBIT" ? "text-orange-700" : "text-teal-700"}>
               {note.type === "DEBIT" ? "+" : "-"}฿{formatCurrency(note.totalAmount)}
             </span>
