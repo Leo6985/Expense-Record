@@ -232,7 +232,7 @@ export async function importSalesInvoicesCSV(rows: ImportRow[]) {
     }
     const invoiceDate = parseImportDate(row.invoiceDate);
     if (!invoiceDate) {
-      errors.push(`เลขที่ใบกำกับภาษี ${row.invoiceNumber}: วันที่ไม่ถูกต้อง`);
+      errors.push(`เลขที่ใบกำกับภาษี ${row.invoiceNumber}: วันที่ไม่ถูกต้อง ("${row.invoiceDate}")`);
       continue;
     }
     const discountAmount = row.discountAmount ?? 0;
