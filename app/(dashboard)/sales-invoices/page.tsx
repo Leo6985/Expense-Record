@@ -60,11 +60,11 @@ export default async function SalesInvoicesPage({
           <table className="w-full text-sm">
             <thead>
               <tr className="bg-gray-50 border-b border-gray-200">
+                <th className="text-left px-4 py-3 font-medium text-gray-600">วันที่</th>
                 <th className="text-left px-4 py-3 font-medium text-gray-600">เลขที่ใบกำกับภาษี</th>
                 <th className="text-left px-4 py-3 font-medium text-gray-600">ลูกค้า</th>
-                <th className="text-left px-4 py-3 font-medium text-gray-600">วันที่</th>
-                <th className="text-left px-4 py-3 font-medium text-gray-600">กำหนดชำระ</th>
                 <th className="text-right px-4 py-3 font-medium text-gray-600">จำนวนเงิน</th>
+                <th className="text-left px-4 py-3 font-medium text-gray-600">กำหนดชำระ</th>
                 <th className="text-left px-4 py-3 font-medium text-gray-600">สถานะ</th>
                 <th className="text-right px-4 py-3 font-medium text-gray-600">จัดการ</th>
               </tr>
@@ -80,18 +80,18 @@ export default async function SalesInvoicesPage({
                   const isOverdue = (inv.status === "PENDING" || inv.status === "PARTIALLY_RECEIVED") && new Date(inv.dueDate) < new Date();
                   return (
                     <tr key={inv.id} className="border-b border-gray-100 hover:bg-gray-50">
+                      <td className="px-4 py-3 text-gray-600">{formatDate(inv.invoiceDate)}</td>
                       <td className="px-4 py-3">
                         <Link href={`/sales-invoices/${inv.id}`} className="font-mono text-blue-700 hover:underline">
                           {inv.invoiceNumber}
                         </Link>
                       </td>
                       <td className="px-4 py-3 font-medium">{inv.customer.name}</td>
-                      <td className="px-4 py-3 text-gray-600">{formatDate(inv.invoiceDate)}</td>
+                      <td className="px-4 py-3 text-right font-medium">฿{formatCurrency(inv.totalAmount)}</td>
                       <td className={`px-4 py-3 ${isOverdue ? "text-red-600 font-medium" : "text-gray-600"}`}>
                         {formatDate(inv.dueDate)}
                         {isOverdue && " ⚠️"}
                       </td>
-                      <td className="px-4 py-3 text-right font-medium">฿{formatCurrency(inv.totalAmount)}</td>
                       <td className="px-4 py-3">
                         <span className={`inline-flex px-2 py-0.5 rounded-full text-xs font-medium ${isOverdue ? "bg-red-100 text-red-700" : s.color}`}>
                           {isOverdue ? "เกินกำหนด" : s.label}
