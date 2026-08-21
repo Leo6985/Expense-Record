@@ -118,6 +118,7 @@ export default function SalesInvoiceCsvImport() {
   const [parseError, setParseError] = useState("");
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<ImportResult | null>(null);
+  const [toast, setToast] = useState<string | null>(null);
 
   async function handleFile(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
@@ -149,6 +150,10 @@ export default function SalesInvoiceCsvImport() {
       const res = await importSalesInvoicesCSV(rows);
       setResult(res);
       setRows([]);
+      setToast(
+        `นำเข้าข้อมูลใบกำกับภาษีขายเสร็จแล้ว — สร้างใหม่ ${res.created} รายการ · อัปเดต ${res.updated} รายการ`
+      );
+      setTimeout(() => setToast(null), 5000);
     } finally {
       setLoading(false);
     }
@@ -169,6 +174,14 @@ export default function SalesInvoiceCsvImport() {
       >
         นำเข้าข้อมูลการขาย
       </button>
+
+      {toast && (
+        <div className="fixed top-4 right-4 z-[60] bg-green-600 text-white px-4 py-3 rounded-lg shadow-lg text-sm flex items-center gap-2">
+          <span>✓</span>
+          <span>{toast}</span>
+          <button onClick={() => setToast(null)} className="ml-2 text-green-100 hover:text-white leading-none">✕</button>
+        </div>
+      )}
 
       {open && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
