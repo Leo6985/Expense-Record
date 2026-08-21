@@ -92,9 +92,11 @@ export async function getReceipt(id: string) {
 // Sequences by the highest existing number for this month's prefix, not by row count —
 // count() collides with an existing number once any row in the middle of the sequence
 // has been deleted, causing the create to fail with a unique-constraint error.
-export async function getNextReceiptNumber() {
-  const year = String(new Date().getFullYear() + 543).slice(-2);
-  const month = String(new Date().getMonth() + 1).padStart(2, "0");
+// Numbered by the receipt's payment month (receiptDate), not the date it's recorded in the
+// system, so a receipt entered late still slots into the sequence for the month it was paid.
+export async function getNextReceiptNumber(receiptDate: Date) {
+  const year = String(receiptDate.getUTCFullYear() + 543).slice(-2);
+  const month = String(receiptDate.getUTCMonth() + 1).padStart(2, "0");
   const prefix = `RC${year}${month}`;
   const last = await prisma.receipt.findFirst({
     where: { receiptNumber: { startsWith: prefix } },
@@ -162,7 +164,7 @@ export async function createReceipt(data: ReceiptHeaderInput & { items: ReceiptI
 
   if (data.items.length === 0) throw new Error("กรุณาเลือกใบกำกับภาษีขายอย่างน้อย 1 รายการ");
 
-  const receiptNumber = await getNextReceiptNumber();
+  const receiptNumber = await getNextReceiptNumber(new Date(data.receiptDate));
   const items = await buildReceiptItems(data.items);
   const totalAmount = Math.round(items.reduce((s, i) => s + i.amount, 0) * 100) / 100;
   const feeAmount = data.feeAmount ?? 0;
