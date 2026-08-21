@@ -102,21 +102,22 @@ model Customer {
 }
 
 model SalesInvoice {
-  id            String   @id @default(cuid())
-  invoiceNumber String   @unique
-  invoiceDate   DateTime
-  dueDate       DateTime @default(now())
-  customerId    String
-  customer      Customer @relation(fields: [customerId], references: [id])
-  amount        Float
-  vatAmount     Float    @default(0)
-  totalAmount   Float
-  status        String   @default("PENDING")
-  notes         String?
-  createdByName String?
-  createdById   String?
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
+  id             String   @id @default(cuid())
+  invoiceNumber  String   @unique
+  invoiceDate    DateTime
+  dueDate        DateTime @default(now())
+  customerId     String
+  customer       Customer @relation(fields: [customerId], references: [id])
+  amount         Float
+  discountAmount Float    @default(0)
+  vatAmount      Float    @default(0)
+  totalAmount    Float
+  status         String   @default("PENDING")
+  notes          String?
+  createdByName  String?
+  createdById    String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
 
   receiptItems     ReceiptItem[]
   debitCreditNotes DebitCreditNote[]

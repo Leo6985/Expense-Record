@@ -9,6 +9,7 @@ type InvoiceRow = {
   invoiceNumber: string;
   customerName: string;
   amount?: number;
+  discountAmount?: number;
   vatAmount?: number;
   totalAmount?: number;
 };
@@ -21,13 +22,14 @@ type ImportResult = {
   errors: string[];
 };
 
-const HEADERS = ["invoiceDate", "invoiceNumber", "customerName", "amount", "vatAmount", "totalAmount"];
+const HEADERS = ["invoiceDate", "invoiceNumber", "customerName", "amount", "discountAmount", "vatAmount", "totalAmount"];
 
 const THAI_LABEL_TO_KEY: Record<string, string> = {
   "วันที่ใบกำกับภาษี": "invoiceDate",
   "เลขที่ใบกำกับภาษี": "invoiceNumber",
   "รายชื่อลูกค้า": "customerName",
   "ยอดก่อนภาษี": "amount",
+  "ส่วนลด": "discountAmount",
   "ภาษีมูลค่าเพิ่ม": "vatAmount",
   "ยอดรวม": "totalAmount",
 };
@@ -61,6 +63,7 @@ function rowsFromObjects(objects: Record<string, unknown>[]): InvoiceRow[] {
       invoiceNumber: String(mapped["invoiceNumber"] ?? "").trim(),
       customerName: String(mapped["customerName"] ?? "").trim(),
       amount: toNumber(mapped["amount"]),
+      discountAmount: toNumber(mapped["discountAmount"]),
       vatAmount: toNumber(mapped["vatAmount"]),
       totalAmount: toNumber(mapped["totalAmount"]),
     };
@@ -212,7 +215,7 @@ export default function SalesInvoiceCsvImport() {
 
               <div className="bg-gray-50 rounded-lg px-4 py-3 text-xs text-gray-500">
                 <p className="font-semibold text-gray-600 mb-1">คอลัมน์ที่รองรับ</p>
-                <code className="font-mono break-all">วันที่ใบกำกับภาษี, เลขที่ใบกำกับภาษี, รายชื่อลูกค้า, ยอดก่อนภาษี, ภาษีมูลค่าเพิ่ม, ยอดรวม</code>
+                <code className="font-mono break-all">วันที่ใบกำกับภาษี, เลขที่ใบกำกับภาษี, รายชื่อลูกค้า, ยอดก่อนภาษี, ส่วนลด, ภาษีมูลค่าเพิ่ม, ยอดรวม</code>
                 <p className="mt-1 text-gray-400">รูปแบบวันที่: YYYY-MM-DD (เช่น 2026-08-01) หรือ DD/MM/YYYY (เช่น 01/08/2026)</p>
               </div>
 
@@ -243,7 +246,7 @@ export default function SalesInvoiceCsvImport() {
                     <table className="text-xs w-full">
                       <thead>
                         <tr className="bg-gray-50 border-b border-gray-200">
-                          {["วันที่", "เลขที่ใบกำกับภาษี", "ลูกค้า", "ก่อนภาษี", "VAT", "รวม"].map((h) => (
+                          {["วันที่", "เลขที่ใบกำกับภาษี", "ลูกค้า", "ก่อนภาษี", "ส่วนลด", "VAT", "รวม"].map((h) => (
                             <th key={h} className="text-left px-3 py-2 font-medium text-gray-600 whitespace-nowrap">{h}</th>
                           ))}
                         </tr>
@@ -255,12 +258,13 @@ export default function SalesInvoiceCsvImport() {
                             <td className="px-3 py-1.5 font-mono font-semibold text-blue-700">{r.invoiceNumber}</td>
                             <td className="px-3 py-1.5">{r.customerName}</td>
                             <td className="px-3 py-1.5 text-right">{r.amount ?? "-"}</td>
+                            <td className="px-3 py-1.5 text-right">{r.discountAmount ?? "-"}</td>
                             <td className="px-3 py-1.5 text-right">{r.vatAmount ?? "-"}</td>
                             <td className="px-3 py-1.5 text-right font-medium">{r.totalAmount ?? "-"}</td>
                           </tr>
                         ))}
                         {rows.length > 10 && (
-                          <tr><td colSpan={6} className="px-3 py-2 text-center text-gray-400">... และอีก {rows.length - 10} แถว</td></tr>
+                          <tr><td colSpan={7} className="px-3 py-2 text-center text-gray-400">... และอีก {rows.length - 10} แถว</td></tr>
                         )}
                       </tbody>
                     </table>

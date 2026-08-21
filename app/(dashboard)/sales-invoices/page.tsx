@@ -63,6 +63,7 @@ export default async function SalesInvoicesPage({
                 <th className="text-left px-4 py-3 font-medium text-gray-600">วันที่</th>
                 <th className="text-left px-4 py-3 font-medium text-gray-600">เลขที่ใบกำกับภาษี</th>
                 <th className="text-left px-4 py-3 font-medium text-gray-600">ลูกค้า</th>
+                <th className="text-right px-4 py-3 font-medium text-gray-600">ส่วนลด</th>
                 <th className="text-right px-4 py-3 font-medium text-gray-600">จำนวนเงิน</th>
                 <th className="text-left px-4 py-3 font-medium text-gray-600">กำหนดชำระ</th>
                 <th className="text-left px-4 py-3 font-medium text-gray-600">สถานะ</th>
@@ -72,7 +73,7 @@ export default async function SalesInvoicesPage({
             <tbody>
               {invoices.length === 0 ? (
                 <tr>
-                  <td colSpan={7} className="px-4 py-8 text-center text-gray-400">ไม่พบข้อมูล</td>
+                  <td colSpan={8} className="px-4 py-8 text-center text-gray-400">ไม่พบข้อมูล</td>
                 </tr>
               ) : (
                 invoices.map((inv) => {
@@ -87,6 +88,9 @@ export default async function SalesInvoicesPage({
                         </Link>
                       </td>
                       <td className="px-4 py-3 font-medium">{inv.customer.name}</td>
+                      <td className="px-4 py-3 text-right text-gray-600">
+                        {inv.discountAmount > 0 ? `฿${formatCurrency(inv.discountAmount)}` : "-"}
+                      </td>
                       <td className="px-4 py-3 text-right font-medium">฿{formatCurrency(inv.totalAmount)}</td>
                       <td className={`px-4 py-3 ${isOverdue ? "text-red-600 font-medium" : "text-gray-600"}`}>
                         {formatDate(inv.dueDate)}

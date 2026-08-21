@@ -122,6 +122,12 @@ export default function SalesInvoiceDetailPage() {
             <span>ยอดก่อน VAT</span>
             <span>฿{formatCurrency(invoice.amount)}</span>
           </div>
+          {invoice.discountAmount > 0 && (
+            <div className="flex justify-between text-gray-600">
+              <span>ส่วนลด</span>
+              <span className="text-red-600">-฿{formatCurrency(invoice.discountAmount)}</span>
+            </div>
+          )}
           <div className="flex justify-between text-gray-600">
             <span>VAT</span>
             <span>฿{formatCurrency(invoice.vatAmount)}</span>

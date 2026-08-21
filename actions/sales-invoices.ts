@@ -49,6 +49,7 @@ export async function syncInvoiceToSheet(invoice: {
   dueDate: Date;
   customerId: string;
   amount: number;
+  discountAmount: number;
   vatAmount: number;
   totalAmount: number;
   status: string;
@@ -204,6 +205,7 @@ type ImportRow = {
   invoiceDate: string;
   customerName: string;
   amount?: number;
+  discountAmount?: number;
   vatAmount?: number;
   totalAmount?: number;
 };
@@ -227,9 +229,11 @@ export async function importSalesInvoicesCSV(rows: ImportRow[]) {
       errors.push(`เลขที่ใบกำกับภาษี ${row.invoiceNumber}: วันที่ไม่ถูกต้อง`);
       continue;
     }
+    const discountAmount = row.discountAmount ?? 0;
     const vatAmount = row.vatAmount ?? 0;
-    const amount = row.amount ?? (row.totalAmount !== undefined ? row.totalAmount - vatAmount : undefined);
-    const totalAmount = row.totalAmount ?? (amount !== undefined ? amount + vatAmount : undefined);
+    // ยอดรวม = (ยอดก่อนภาษี - ส่วนลด) + VAT — discount reduces the pre-VAT base before VAT is added.
+    const amount = row.amount ?? (row.totalAmount !== undefined ? row.totalAmount - vatAmount + discountAmount : undefined);
+    const totalAmount = row.totalAmount ?? (amount !== undefined ? amount - discountAmount + vatAmount : undefined);
     if (amount === undefined || totalAmount === undefined) {
       errors.push(`เลขที่ใบกำกับภาษี ${row.invoiceNumber}: ต้องมียอดก่อนภาษีหรือยอดรวมอย่างน้อยหนึ่งค่า`);
       continue;
@@ -253,7 +257,7 @@ export async function importSalesInvoicesCSV(rows: ImportRow[]) {
           errors.push(`เลขที่ใบกำกับภาษี ${row.invoiceNumber}: มีการตัดชำระแล้ว ข้ามการอัปเดต`);
           continue;
         }
-        const data = { invoiceDate, dueDate, customerId: customer.id, amount, vatAmount, totalAmount };
+        const data = { invoiceDate, dueDate, customerId: customer.id, amount, discountAmount, vatAmount, totalAmount };
         await prisma.salesInvoice.update({ where: { id: existing.id }, data });
         updated++;
         toUpdateInSheet.push({ id: existing.id, data });
@@ -265,6 +269,7 @@ export async function importSalesInvoicesCSV(rows: ImportRow[]) {
             dueDate,
             customerId: customer.id,
             amount,
+            discountAmount,
             vatAmount,
             totalAmount,
             status: "PENDING",

@@ -14,18 +14,22 @@ export async function GET() {
   if (!session) return new Response("Unauthorized", { status: 401 });
 
   const invoices = await getSalesInvoices();
+  const headers = ["วันที่ใบกำกับภาษี", "กำหนดชำระ", "เลขที่ใบกำกับภาษี", "รายชื่อลูกค้า", "ยอดก่อนภาษี", "ส่วนลด", "ภาษีมูลค่าเพิ่ม", "ยอดรวม", "สถานะ"];
   const rows = invoices.map((inv) => ({
     "วันที่ใบกำกับภาษี": inv.invoiceDate.toISOString().slice(0, 10),
     "กำหนดชำระ": inv.dueDate.toISOString().slice(0, 10),
     "เลขที่ใบกำกับภาษี": inv.invoiceNumber,
     "รายชื่อลูกค้า": inv.customer.name,
     "ยอดก่อนภาษี": inv.amount,
+    "ส่วนลด": inv.discountAmount,
     "ภาษีมูลค่าเพิ่ม": inv.vatAmount,
     "ยอดรวม": inv.totalAmount,
     "สถานะ": STATUS_LABEL[inv.status] ?? inv.status,
   }));
 
-  const sheet = XLSX.utils.json_to_sheet(rows);
+  // json_to_sheet derives headers from row keys — an empty `rows` array produces a sheet
+  // with no header row at all, so the header list must be passed explicitly.
+  const sheet = XLSX.utils.json_to_sheet(rows, { header: headers });
   const workbook = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(workbook, sheet, "SalesInvoices");
   const buffer = XLSX.write(workbook, { type: "buffer", bookType: "xlsx" });

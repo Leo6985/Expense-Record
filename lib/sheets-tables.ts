@@ -482,6 +482,7 @@ export type SalesInvoiceRecord = {
   dueDate: Date;
   customerId: string;
   amount: number;
+  discountAmount: number;
   vatAmount: number;
   totalAmount: number;
   status: string;
@@ -501,6 +502,7 @@ export const SALES_INVOICE_COLUMNS: ColumnDef[] = [
   { key: "dueDate", type: "date" },
   { key: "customerId", type: "string" },
   { key: "amount", type: "number" },
+  { key: "discountAmount", type: "number" },
   { key: "vatAmount", type: "number" },
   { key: "totalAmount", type: "number" },
   { key: "status", type: "string" },
