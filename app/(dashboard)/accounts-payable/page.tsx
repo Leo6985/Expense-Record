@@ -41,7 +41,7 @@ export default async function AccountsPayablePage({
             <input
               name="q"
               defaultValue={q}
-              placeholder="ค้นหาเลข AP, เลขใบแจ้งหนี้, ชื่อผู้ขาย..."
+              placeholder="ค้นหาเลขที่ AP, เลขที่ใบแจ้งหนี้, ชื่อผู้ขาย..."
               className="flex-1 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
             />
             <select
@@ -64,10 +64,10 @@ export default async function AccountsPayablePage({
           <table className="w-full text-sm">
             <thead>
               <tr className="bg-gray-50 border-b border-gray-200">
-                <th className="text-left px-4 py-3 font-medium text-gray-600">เลข AP</th>
-                <th className="text-left px-4 py-3 font-medium text-gray-600">ผู้ขาย</th>
-                <th className="text-left px-4 py-3 font-medium text-gray-600">เลขใบแจ้งหนี้</th>
                 <th className="text-left px-4 py-3 font-medium text-gray-600">วันที่ใบแจ้งหนี้</th>
+                <th className="text-left px-4 py-3 font-medium text-gray-600">เลขที่ใบแจ้งหนี้</th>
+                <th className="text-left px-4 py-3 font-medium text-gray-600">เลขที่ AP</th>
+                <th className="text-left px-4 py-3 font-medium text-gray-600">ผู้ขาย</th>
                 <th className="text-left px-4 py-3 font-medium text-gray-600">วันครบกำหนด</th>
                 <th className="text-right px-4 py-3 font-medium text-gray-600">จำนวนเงิน</th>
                 <th className="text-left px-4 py-3 font-medium text-gray-600">สถานะ</th>
@@ -84,14 +84,14 @@ export default async function AccountsPayablePage({
                   const isOverdue = ap.status === "PENDING" && new Date(ap.dueDate) < new Date();
                   return (
                     <tr key={ap.id} className="border-b border-gray-100 hover:bg-gray-50">
+                      <td className="px-4 py-3 text-gray-600">{formatDate(ap.invoiceDate)}</td>
+                      <td className="px-4 py-3 text-gray-600">{ap.invoiceNumber}</td>
                       <td className="px-4 py-3">
                         <Link href={`/accounts-payable/${ap.id}`} className="font-mono text-blue-700 hover:underline">
                           {ap.apNumber}
                         </Link>
                       </td>
                       <td className="px-4 py-3 font-medium">{ap.vendor.name}</td>
-                      <td className="px-4 py-3 text-gray-600">{ap.invoiceNumber}</td>
-                      <td className="px-4 py-3 text-gray-600">{formatDate(ap.invoiceDate)}</td>
                       <td className={`px-4 py-3 ${isOverdue ? "text-red-600 font-medium" : "text-gray-600"}`}>
                         {formatDate(ap.dueDate)}
                         {isOverdue && " ⚠️"}
