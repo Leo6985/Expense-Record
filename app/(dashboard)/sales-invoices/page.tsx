@@ -72,6 +72,10 @@ export default async function SalesInvoicesPage({
           </form>
         </div>
 
+        <div className="px-4 py-2 border-b border-gray-100 text-sm text-gray-500">
+          พบ {invoices.length.toLocaleString("th-TH")} รายการ
+        </div>
+
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
