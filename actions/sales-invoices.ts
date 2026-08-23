@@ -6,18 +6,9 @@ import { revalidatePath } from "next/cache";
 import { findOrCreateCustomerByName } from "./customers";
 import { salesInvoicesTable, SalesInvoiceRecord } from "@/lib/sheets-tables";
 import { getEffectiveInvoiceTotal } from "@/lib/sales-invoice-reconciliation";
+import { computeDueDate } from "@/lib/invoice-due-dates";
 
 const AMOUNT_TOLERANCE = 0.01;
-
-// `creditDays` is null for a customer whose credit terms haven't been set yet (e.g. one
-// auto-created by this file's CSV import). Falls back to 30 days so a dueDate can still be
-// computed — this fallback is display-only and does NOT get written back onto the customer;
-// the sales-invoices/customers UI separately flags such customers as missing credit data.
-function computeDueDate(invoiceDate: Date, creditDays: number | null): Date {
-  const due = new Date(invoiceDate);
-  due.setDate(due.getDate() + (creditDays ?? 30));
-  return due;
-}
 
 // `new Date(string)` is locale-ambiguous for slash-separated dates — it reads "12/05/2026"
 // as MM/DD/YYYY (US), silently swapping day and month for any DD/MM/YYYY input (the format
@@ -92,33 +83,6 @@ export async function syncInvoicesToSheetById(invoiceIds: string[]) {
   if (uniqueIds.length === 0) return;
   const invoices = await prisma.salesInvoice.findMany({ where: { id: { in: uniqueIds } } });
   await Promise.all(invoices.map((invoice) => syncInvoiceToSheet(invoice)));
-}
-
-// Called from the customer edit page right after updateCustomer, whenever creditDays actually
-// changed, so every one of that customer's still-active invoices' dueDate reflects the
-// customer's current credit terms instead of staying frozen at whatever was computed (or
-//30-day-defaulted) back when the invoice was imported. Skips CANCELLED invoices — their
-// dueDate is a moot historical field, same as cancelSalesInvoice never touching it.
-export async function recomputeInvoiceDueDatesForCustomer(customerId: string, creditDays: number | null) {
-  const invoices = await prisma.salesInvoice.findMany({
-    where: { customerId, status: { not: "CANCELLED" } },
-    select: { id: true, invoiceDate: true },
-  });
-  if (invoices.length === 0) return;
-
-  await Promise.all(
-    invoices.map((inv) =>
-      prisma.salesInvoice.update({
-        where: { id: inv.id },
-        data: { dueDate: computeDueDate(inv.invoiceDate, creditDays) },
-      })
-    )
-  );
-
-  await syncInvoicesToSheetById(invoices.map((inv) => inv.id));
-
-  revalidatePath("/sales-invoices");
-  for (const inv of invoices) revalidatePath(`/sales-invoices/${inv.id}`);
 }
 
 // Sums how much of an invoice's effective total (totalAmount adjusted by any APPROVED debit/

@@ -3,6 +3,7 @@
 import { prisma } from "@/lib/prisma";
 import { customersTable, CustomerRecord } from "@/lib/sheets-tables";
 import { revalidatePath } from "next/cache";
+import { recomputeCustomerInvoiceDueDates } from "@/lib/invoice-due-dates";
 
 /**
  * Postgres remains authoritative (SalesInvoice.customerId still holds a real FK to
@@ -98,11 +99,19 @@ export async function updateCustomer(
     if (existing) throw new Error(`รหัสลูกค้า ${data.code} มีในระบบแล้ว`);
   }
 
+  const before = await prisma.customer.findUniqueOrThrow({ where: { id }, select: { creditDays: true } });
   const customer = await prisma.customer.update({ where: { id }, data });
   try {
     await syncCustomerToSheet(customer);
   } catch (err) {
     console.error("syncCustomerToSheet failed after updateCustomer:", err);
+  }
+
+  // เมื่อระยะเครดิตเปลี่ยน ต้องปรับปรุงกำหนดชำระของใบกำกับภาษีขายที่มีอยู่เดิมให้ตรงกับค่าล่าสุด
+  // ไม่เช่นนั้นจะค้างอยู่ที่ค่าเดิม (หรือ fallback 30 วัน) ที่คำนวณไว้ตอนนำเข้าข้อมูล
+  if (data.creditDays !== undefined && data.creditDays !== before.creditDays) {
+    await recomputeCustomerInvoiceDueDates(id, data.creditDays);
+    revalidatePath("/sales-invoices");
   }
 
   revalidatePath("/customers");
@@ -146,6 +155,7 @@ export async function importCustomersCSV(
   const errors: string[] = [];
   const toCreateInSheet: CustomerRecord[] = [];
   const toUpdateInSheet: { id: string; data: Partial<CustomerRecord> }[] = [];
+  let dueDatesRecomputed = false;
 
   for (const row of rows) {
     if (!row.code || !row.name) {
@@ -167,7 +177,17 @@ export async function importCustomersCSV(
         await prisma.customer.update({ where: { code: row.code }, data });
         updated++;
         toUpdateInSheet.push({ id: existing.id, data });
+
+        // เช่นเดียวกับ updateCustomer — ถ้าระยะเครดิตเปลี่ยนจากการนำเข้าไฟล์ ต้องปรับปรุงกำหนดชำระของ
+        // ใบกำกับภาษีขายที่มีอยู่เดิมของลูกค้ารายนี้ด้วย ไม่เช่นนั้นจะค้างอยู่ที่ค่าเดิม
+        if (data.creditDays !== existing.creditDays) {
+          await recomputeCustomerInvoiceDueDates(existing.id, data.creditDays);
+          dueDatesRecomputed = true;
+        }
       } else {
+        // creditDays left null (not defaulted to 30) when the file doesn't specify one — a
+        // customer with genuinely no credit data set shows as such instead of a fabricated
+        // default, same as findOrCreateCustomerByName in actions/sales-invoices.ts.
         const customer = await prisma.customer.create({
           data: {
             code: row.code,
@@ -177,7 +197,7 @@ export async function importCustomersCSV(
             contactPerson: row.contactPerson || null,
             phone: row.phone || null,
             email: row.email || null,
-            creditDays: row.creditDays ?? 30,
+            creditDays: row.creditDays ?? null,
           },
         });
         created++;
@@ -198,6 +218,7 @@ export async function importCustomersCSV(
   }
 
   revalidatePath("/customers");
+  if (dueDatesRecomputed) revalidatePath("/sales-invoices");
   return { created, updated, errors };
 }
 

@@ -3,7 +3,6 @@
 import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 import { getCustomer, updateCustomer } from "@/actions/customers";
-import { recomputeInvoiceDueDatesForCustomer } from "@/actions/sales-invoices";
 import Link from "next/link";
 import PageLoading from "@/components/PageLoading";
 
@@ -62,12 +61,9 @@ export default function CustomerDetailPage() {
         isActive: form.get("isActive") === "true",
       });
 
-      // กำหนดชำระของใบกำกับภาษีขายคำนวณจากระยะเครดิตของลูกค้า — เมื่อแก้ไขระยะเครดิตแล้ว
-      // ต้องปรับปรุงกำหนดชำระของใบกำกับภาษีขายที่มีอยู่เดิมให้ตรงกับค่าล่าสุดด้วย
-      if (creditDaysChanged) {
-        await recomputeInvoiceDueDatesForCustomer(params.id as string, creditDays);
-        setDueDatesUpdated(true);
-      }
+      // updateCustomer already recomputes กำหนดชำระ of this customer's invoices server-side
+      // when creditDays changes — this flag is only for the success-message copy below.
+      if (creditDaysChanged) setDueDatesUpdated(true);
 
       setCustomer({ ...customer!, creditDays });
       setSuccess(true);
