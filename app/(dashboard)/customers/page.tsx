@@ -53,6 +53,7 @@ export default async function CustomersPage({
                 <th className="text-left px-4 py-3 font-medium text-gray-600">ชื่อลูกค้า</th>
                 <th className="text-left px-4 py-3 font-medium text-gray-600">ผู้ติดต่อ</th>
                 <th className="text-left px-4 py-3 font-medium text-gray-600">อีเมล</th>
+                <th className="text-left px-4 py-3 font-medium text-gray-600">เครดิต (วัน)</th>
                 <th className="text-left px-4 py-3 font-medium text-gray-600">สถานะ</th>
                 <th className="text-left px-4 py-3 font-medium text-gray-600">สร้างเมื่อ</th>
                 <th className="text-right px-4 py-3 font-medium text-gray-600">จัดการ</th>
@@ -61,31 +62,34 @@ export default async function CustomersPage({
             <tbody>
               {customers.length === 0 ? (
                 <tr>
-                  <td colSpan={7} className="px-4 py-8 text-center text-gray-400">
+                  <td colSpan={8} className="px-4 py-8 text-center text-gray-400">
                     ไม่พบข้อมูลลูกค้า
                   </td>
                 </tr>
               ) : (
                 customers.map((customer) => (
                   <tr key={customer.id} className="border-b border-gray-100 hover:bg-gray-50">
-                    <td className="px-4 py-3 font-mono text-blue-700">
-                      <Link href={`/customers/${customer.id}`} className="hover:underline">
-                        {customer.code}
-                      </Link>
-                    </td>
+                    <td className="px-4 py-3 font-mono text-gray-500">{customer.code}</td>
                     <td className="px-4 py-3 font-medium">
-                      {customer.name}
-                      {customer.creditDays == null && (
-                        <span
-                          title="ยังไม่ระบุข้อมูลเครดิต"
-                          className="ml-2 inline-flex items-center px-1.5 py-0.5 rounded-full text-[11px] font-medium bg-amber-100 text-amber-700"
-                        >
-                          ⚠ ไม่มีข้อมูลเครดิต
-                        </span>
-                      )}
+                      <Link href={`/customers/${customer.id}`} className="text-blue-700 hover:underline">
+                        {customer.name}
+                      </Link>
                     </td>
                     <td className="px-4 py-3 text-gray-600">{customer.contactPerson || "-"}</td>
                     <td className="px-4 py-3 text-gray-600">{customer.email || "-"}</td>
+                    <td className="px-4 py-3">
+                      {customer.creditDays != null ? (
+                        <span className="text-gray-700">{customer.creditDays}</span>
+                      ) : (
+                        <Link
+                          href={`/customers/${customer.id}`}
+                          title="ยังไม่ระบุข้อมูลเครดิต กดเพื่อไปกรอก"
+                          className="inline-flex items-center px-1.5 py-0.5 rounded-full text-[11px] font-medium bg-amber-100 text-amber-700 hover:bg-amber-200"
+                        >
+                          ⚠ ไม่มีข้อมูล
+                        </Link>
+                      )}
+                    </td>
                     <td className="px-4 py-3">
                       <span
                         className={`inline-flex px-2 py-0.5 rounded-full text-xs font-medium ${
