@@ -124,6 +124,8 @@ export default function CustomerCsvImport() {
         setParseError("");
         setRows(parsed);
         setResult(null);
+        // Import starts immediately once a valid file is selected — no separate confirm click.
+        await handleImport(parsed);
       }
     } catch {
       setParseError("ไม่สามารถอ่านไฟล์นี้ได้ กรุณาตรวจสอบรูปแบบไฟล์");
@@ -131,11 +133,11 @@ export default function CustomerCsvImport() {
     }
   }
 
-  async function handleImport() {
-    if (rows.length === 0) return;
+  async function handleImport(rowsToImport: CustomerRow[] = rows) {
+    if (rowsToImport.length === 0) return;
     setLoading(true);
     try {
-      const res = await importCustomersCSV(rows);
+      const res = await importCustomersCSV(rowsToImport);
       setResult(res);
       setRows([]);
       if (res.errors.length === 0) {
@@ -257,7 +259,7 @@ export default function CustomerCsvImport() {
 
               {rows.length > 0 && (
                 <div>
-                  <p className="text-sm font-medium text-gray-700 mb-2">ตัวอย่างข้อมูลที่จะนำเข้า ({rows.length} แถว)</p>
+                  <p className="text-sm font-medium text-gray-700 mb-2">กำลังนำเข้าข้อมูล ({rows.length} แถว)</p>
                   <div className="overflow-x-auto border border-gray-200 rounded-lg">
                     <table className="text-xs w-full">
                       <thead>
@@ -291,15 +293,6 @@ export default function CustomerCsvImport() {
               <button onClick={handleClose} className="border border-gray-300 text-gray-700 px-5 py-2 rounded-lg text-sm hover:bg-gray-50">
                 ปิด
               </button>
-              {rows.length > 0 && (
-                <button
-                  onClick={handleImport}
-                  disabled={loading}
-                  className="bg-green-600 text-white px-5 py-2 rounded-lg text-sm font-medium hover:bg-green-700 disabled:opacity-50"
-                >
-                  {loading ? "กำลังนำเข้า..." : `ยืนยันนำเข้า ${rows.length} รายการ`}
-                </button>
-              )}
             </div>
           </div>
         </div>
