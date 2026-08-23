@@ -40,7 +40,7 @@ export default async function PurchaseOrdersPage({
             <input
               name="q"
               defaultValue={q}
-              placeholder="ค้นหาเลข PO, ชื่อผู้ขาย..."
+              placeholder="ค้นหาเลขที่ใบสั่งซื้อ, ชื่อผู้ขาย..."
               className="flex-1 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
             />
             <select
@@ -63,9 +63,9 @@ export default async function PurchaseOrdersPage({
           <table className="w-full text-sm">
             <thead>
               <tr className="bg-gray-50 border-b border-gray-200">
-                <th className="text-left px-4 py-3 font-medium text-gray-600">เลข PO</th>
-                <th className="text-left px-4 py-3 font-medium text-gray-600">ผู้ขาย</th>
                 <th className="text-left px-4 py-3 font-medium text-gray-600">วันที่สั่งซื้อ</th>
+                <th className="text-left px-4 py-3 font-medium text-gray-600">เลขที่ใบสั่งซื้อ</th>
+                <th className="text-left px-4 py-3 font-medium text-gray-600">ผู้ขาย</th>
                 <th className="text-left px-4 py-3 font-medium text-gray-600">วันที่รับของ</th>
                 <th className="text-right px-4 py-3 font-medium text-gray-600">มูลค่า</th>
                 <th className="text-left px-4 py-3 font-medium text-gray-600">สถานะ</th>
@@ -83,13 +83,13 @@ export default async function PurchaseOrdersPage({
                   const s = statusConfig[po.status] ?? { label: po.status, color: "bg-gray-100 text-gray-700" };
                   return (
                     <tr key={po.id} className="border-b border-gray-100 hover:bg-gray-50">
+                      <td className="px-4 py-3 text-gray-600">{formatDate(po.orderDate)}</td>
                       <td className="px-4 py-3">
                         <Link href={`/purchase-orders/${po.id}`} className="font-mono text-blue-700 hover:underline">
                           {po.poNumber}
                         </Link>
                       </td>
                       <td className="px-4 py-3 font-medium">{po.vendor.name}</td>
-                      <td className="px-4 py-3 text-gray-600">{formatDate(po.orderDate)}</td>
                       <td className="px-4 py-3 text-gray-600">{formatDate(po.expectedDate)}</td>
                       <td className="px-4 py-3 text-right font-medium">฿{formatCurrency(po.totalAmount + po.vatAmount)}</td>
                       <td className="px-4 py-3">
