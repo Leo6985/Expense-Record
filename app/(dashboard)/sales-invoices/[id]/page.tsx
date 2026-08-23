@@ -47,7 +47,11 @@ export default function SalesInvoiceDetailPage() {
 
   const s = statusConfig[invoice.status] ?? { label: invoice.status, color: "bg-gray-100 text-gray-700" };
   const canCancel = invoice.status === "PENDING";
-  const isOverdue = (invoice.status === "PENDING" || invoice.status === "PARTIALLY_RECEIVED") && new Date(invoice.dueDate) < new Date();
+  const hasCreditData = invoice.customer.creditDays != null;
+  // Without real credit terms, dueDate is only a 30-day placeholder computed at creation time
+  // (see computeDueDate in actions/sales-invoices.ts) — showing it as a real due date, or
+  // flagging it overdue, would be misleading.
+  const isOverdue = hasCreditData && (invoice.status === "PENDING" || invoice.status === "PARTIALLY_RECEIVED") && new Date(invoice.dueDate) < new Date();
   const noteAdjustment = invoice.debitCreditNotes
     .filter((n) => n.status === "APPROVED")
     .reduce((s, n) => s + (n.type === "DEBIT" ? n.totalAmount : -n.totalAmount), 0);
@@ -147,7 +151,14 @@ export default function SalesInvoiceDetailPage() {
             </div>
           </div>
           <InfoRow label="วันที่ใบกำกับภาษี" value={formatDate(invoice.invoiceDate)} />
-          <InfoRow label="กำหนดชำระ" value={formatDate(invoice.dueDate)} highlight={isOverdue} />
+          {hasCreditData ? (
+            <InfoRow label="กำหนดชำระ" value={formatDate(invoice.dueDate)} highlight={isOverdue} />
+          ) : (
+            <div>
+              <div className="text-xs text-gray-500 mb-0.5">กำหนดชำระ</div>
+              <div className="font-medium text-amber-700">ไม่มีข้อมูลเครดิต</div>
+            </div>
+          )}
           {invoice.notes && <InfoRow label="หมายเหตุ" value={invoice.notes} />}
         </div>
       </div>

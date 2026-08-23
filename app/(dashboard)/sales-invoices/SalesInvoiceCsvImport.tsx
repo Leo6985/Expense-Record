@@ -150,7 +150,12 @@ export default function SalesInvoiceCsvImport() {
       const res = await importSalesInvoicesCSV(rows);
       setResult(res);
       setRows([]);
-      setShowComplete(true);
+      if (res.errors.length === 0) {
+        // Clean import — show a brief confirmation, then close the whole dialog on its own
+        // instead of leaving it open for a second manual close.
+        setShowComplete(true);
+        setTimeout(handleClose, 1800);
+      }
     } finally {
       setLoading(false);
     }
@@ -185,7 +190,7 @@ export default function SalesInvoiceCsvImport() {
               {result.customersCreated > 0 && <> · สร้างลูกค้าใหม่ {result.customersCreated} ราย</>}
             </p>
             <button
-              onClick={() => setShowComplete(false)}
+              onClick={handleClose}
               className="bg-green-600 text-white px-6 py-2 rounded-lg text-sm font-medium hover:bg-green-700 transition-colors"
             >
               ตกลง

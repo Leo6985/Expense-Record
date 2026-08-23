@@ -94,7 +94,11 @@ export default async function SalesInvoicesPage({
               ) : (
                 invoices.map((inv) => {
                   const s = statusConfig[inv.status] ?? { label: inv.status, color: "bg-gray-100 text-gray-700" };
-                  const isOverdue = (inv.status === "PENDING" || inv.status === "PARTIALLY_RECEIVED") && new Date(inv.dueDate) < new Date();
+                  const hasCreditData = inv.customer.creditDays != null;
+                  // Without real credit terms, dueDate is only a 30-day placeholder computed at
+                  // creation time (see computeDueDate in actions/sales-invoices.ts) — showing it
+                  // as a real due date, or flagging it overdue, would be misleading.
+                  const isOverdue = hasCreditData && (inv.status === "PENDING" || inv.status === "PARTIALLY_RECEIVED") && new Date(inv.dueDate) < new Date();
                   return (
                     <tr key={inv.id} className="border-b border-gray-100 hover:bg-gray-50">
                       <td className="px-4 py-3 text-gray-600">{formatDate(inv.invoiceDate)}</td>
@@ -122,8 +126,14 @@ export default async function SalesInvoicesPage({
                       </td>
                       <td className="px-4 py-3 text-right font-medium">฿{formatCurrency(inv.totalAmount)}</td>
                       <td className={`px-4 py-3 ${isOverdue ? "text-red-600 font-medium" : "text-gray-600"}`}>
-                        {formatDate(inv.dueDate)}
-                        {isOverdue && " ⚠️"}
+                        {hasCreditData ? (
+                          <>
+                            {formatDate(inv.dueDate)}
+                            {isOverdue && " ⚠️"}
+                          </>
+                        ) : (
+                          <span className="text-amber-700">ไม่มีข้อมูลเครดิต</span>
+                        )}
                       </td>
                       <td className="px-4 py-3">
                         <span className={`inline-flex px-2 py-0.5 rounded-full text-xs font-medium ${isOverdue ? "bg-red-100 text-red-700" : s.color}`}>
