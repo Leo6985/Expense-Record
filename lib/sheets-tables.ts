@@ -645,3 +645,26 @@ export const debitCreditNotesTable = new SheetTable<DebitCreditNoteRecord>(
   DEBIT_CREDIT_NOTE_TAB_NAME,
   DEBIT_CREDIT_NOTE_COLUMNS
 );
+
+export type InventorySnapshotRecord = {
+  id: string;
+  periodKey: string;
+  openingValue: number;
+  closingValue: number;
+  updatedAt: Date;
+};
+
+export const INVENTORY_SNAPSHOT_TAB_NAME = "InventorySnapshots";
+
+export const INVENTORY_SNAPSHOT_COLUMNS: ColumnDef[] = [
+  { key: "id", type: "string" },
+  { key: "periodKey", type: "string" },
+  { key: "openingValue", type: "number" },
+  { key: "closingValue", type: "number" },
+  { key: "updatedAt", type: "date" },
+];
+
+export const inventorySnapshotsTable = new SheetTable<InventorySnapshotRecord>(
+  INVENTORY_SNAPSHOT_TAB_NAME,
+  INVENTORY_SNAPSHOT_COLUMNS
+);

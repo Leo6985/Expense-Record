@@ -328,3 +328,14 @@ model Payment {
   createdById          String?
   createdAt            DateTime           @default(now())
 }
+
+// Manual opening/closing inventory value per P&L period ("YYYY-MM" for a single month,
+// "YYYY" for a full year), used to compute ต้นทุนขาย (COGS) on the profit-loss report:
+// COGS = openingValue + purchases (from AccountsPayable) - closingValue.
+model InventorySnapshot {
+  id           String   @id @default(cuid())
+  periodKey    String   @unique
+  openingValue Float    @default(0)
+  closingValue Float    @default(0)
+  updatedAt    DateTime @updatedAt
+}

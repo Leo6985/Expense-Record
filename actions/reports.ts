@@ -1,6 +1,8 @@
 "use server";
 
 import { prisma } from "@/lib/prisma";
+import { revalidatePath } from "next/cache";
+import { inventorySnapshotsTable, InventorySnapshotRecord } from "@/lib/sheets-tables";
 
 export async function getDailyPaymentsReport(from: string, to: string) {
   const fromDate = new Date(from);
@@ -204,6 +206,52 @@ export async function getProfitLossReport(params: { year: number; month?: number
   }
 
   return { revenue, expenses, net: round2(revenue - expenses), categoryBreakdown, monthly };
+}
+
+/**
+ * Postgres remains authoritative, so every write dual-writes into the Google Sheet as a
+ * synced mirror. If the Sheet side fails, the Postgres write already succeeded — surface
+ * the sync failure instead of silently losing it, but don't roll back the Postgres write.
+ */
+async function syncInventorySnapshotToSheet(snapshot: {
+  id: string;
+  periodKey: string;
+  openingValue: number;
+  closingValue: number;
+  updatedAt: Date;
+}) {
+  const record: InventorySnapshotRecord = { ...snapshot };
+  try {
+    await inventorySnapshotsTable.update(snapshot.id, record);
+  } catch (err) {
+    if (err instanceof Error && err.message.includes("ไม่พบข้อมูล")) {
+      await inventorySnapshotsTable.create(record);
+    } else {
+      throw err;
+    }
+  }
+}
+
+// periodKey is "YYYY-MM" for a single-month P&L period or "YYYY" for a full-year period —
+// matches the period the profit-loss page is currently showing.
+export async function getInventorySnapshot(periodKey: string) {
+  return prisma.inventorySnapshot.findUnique({ where: { periodKey } });
+}
+
+export async function saveInventorySnapshot(periodKey: string, openingValue: number, closingValue: number) {
+  const snapshot = await prisma.inventorySnapshot.upsert({
+    where: { periodKey },
+    update: { openingValue, closingValue },
+    create: { periodKey, openingValue, closingValue },
+  });
+  try {
+    await syncInventorySnapshotToSheet(snapshot);
+  } catch (err) {
+    console.error("syncInventorySnapshotToSheet failed after saveInventorySnapshot:", err);
+  }
+
+  revalidatePath("/reports/profit-loss");
+  return snapshot;
 }
 
 export async function getCompanyBankAccounts() {
