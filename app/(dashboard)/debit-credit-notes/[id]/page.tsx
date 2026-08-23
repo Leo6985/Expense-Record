@@ -14,6 +14,7 @@ import {
 import { formatDate, formatCurrency } from "@/lib/utils";
 import Link from "next/link";
 import DocNav from "@/components/DocNav";
+import PageLoading from "@/components/PageLoading";
 
 const statusConfig: Record<string, { label: string; color: string }> = {
   DRAFT: { label: "ร่าง", color: "bg-gray-100 text-gray-700" },
@@ -48,7 +49,7 @@ export default function DebitCreditNoteDetailPage() {
     getAdjacentDebitCreditNoteIds(params.id as string).then(setAdjacent);
   }, [params.id]);
 
-  if (!note) return <div className="text-gray-400 text-sm">กำลังโหลด...</div>;
+  if (!note) return <PageLoading />;
 
   const s = statusConfig[note.status] ?? { label: note.status, color: "bg-gray-100 text-gray-700" };
   const t = typeConfig[note.type] ?? { label: note.type, color: "bg-gray-100 text-gray-700" };

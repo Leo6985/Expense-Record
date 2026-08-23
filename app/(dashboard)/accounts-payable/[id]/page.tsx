@@ -7,6 +7,7 @@ import { getAccountsPayableById, getAdjacentAccountsPayableIds, approveAccountsP
 import { formatDate, formatCurrency } from "@/lib/utils";
 import Link from "next/link";
 import DocNav from "@/components/DocNav";
+import PageLoading from "@/components/PageLoading";
 
 const statusConfig: Record<string, { label: string; color: string }> = {
   PENDING: { label: "รอดำเนินการ", color: "bg-yellow-100 text-yellow-700" },
@@ -38,7 +39,7 @@ export default function APDetailPage() {
     getAdjacentAccountsPayableIds(params.id as string).then(setAdjacent);
   }, [params.id]);
 
-  if (!ap) return <div className="text-gray-400 text-sm">กำลังโหลด...</div>;
+  if (!ap) return <PageLoading />;
 
   const s = statusConfig[ap.status] ?? { label: ap.status, color: "bg-gray-100 text-gray-700" };
   const isOverdue = ap.status === "PENDING" && new Date(ap.dueDate) < new Date();

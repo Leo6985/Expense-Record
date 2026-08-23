@@ -6,6 +6,7 @@ import { getSalesInvoiceById, getAdjacentSalesInvoiceIds, cancelSalesInvoice, de
 import { formatDate, formatCurrency } from "@/lib/utils";
 import Link from "next/link";
 import DocNav from "@/components/DocNav";
+import PageLoading from "@/components/PageLoading";
 
 const statusConfig: Record<string, { label: string; color: string }> = {
   PENDING: { label: "รอรับชำระ", color: "bg-yellow-100 text-yellow-700" },
@@ -43,7 +44,7 @@ export default function SalesInvoiceDetailPage() {
     getAdjacentSalesInvoiceIds(params.id as string).then(setAdjacent);
   }, [params.id]);
 
-  if (!invoice) return <div className="text-gray-400 text-sm">กำลังโหลด...</div>;
+  if (!invoice) return <PageLoading />;
 
   const s = statusConfig[invoice.status] ?? { label: invoice.status, color: "bg-gray-100 text-gray-700" };
   const canCancel = invoice.status === "PENDING";

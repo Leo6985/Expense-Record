@@ -101,9 +101,12 @@ export async function getPaymentPrep(id: string) {
 // Sequences by the highest existing number for this month's prefix, not by row count —
 // count() collides with an existing number once any row in the middle of the sequence
 // has been deleted, causing the create to fail with a unique-constraint error.
-export async function getNextPrepNumber() {
-  const year = String(new Date().getFullYear());
-  const month = String(new Date().getMonth() + 1).padStart(2, "0");
+// Numbered by the prep's planned payment month (paymentDate), not the date it's created in
+// the system, so a prep entered ahead of time still slots into the sequence for the month
+// it will actually be paid (mirrors getNextReceiptNumber in actions/receipts.ts).
+export async function getNextPrepNumber(paymentDate: Date) {
+  const year = String(paymentDate.getUTCFullYear());
+  const month = String(paymentDate.getUTCMonth() + 1).padStart(2, "0");
   const prefix = `PP${year}${month}`;
   const last = await prisma.paymentPrep.findFirst({
     where: { prepNumber: { startsWith: prefix } },
@@ -165,7 +168,7 @@ export async function createPaymentPrep(data: {
 
   if (data.items.length === 0) throw new Error("กรุณาเลือกรายการหนี้อย่างน้อย 1 รายการ");
 
-  const prepNumber = await getNextPrepNumber();
+  const prepNumber = await getNextPrepNumber(new Date(data.paymentDate));
   const items = await buildPrepItems(data.items);
   const { totalAmount, totalWithholdingTax, netPayableAmount } = summarize(items);
 

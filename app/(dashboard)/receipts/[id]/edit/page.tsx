@@ -5,6 +5,7 @@ import { useParams, useRouter } from "next/navigation";
 import { getReceipt, updateReceipt } from "@/actions/receipts";
 import ReceiptForm, { ReceiptFormInitial, ReceiptFormValues } from "../../ReceiptForm";
 import Link from "next/link";
+import PageLoading from "@/components/PageLoading";
 
 type Receipt = Awaited<ReturnType<typeof getReceipt>>;
 
@@ -21,7 +22,7 @@ export default function EditReceiptPage() {
     });
   }, [params.id]);
 
-  if (!receipt) return <div className="text-gray-400 text-sm">กำลังโหลด...</div>;
+  if (!receipt) return <PageLoading />;
 
   if (locked) {
     return (

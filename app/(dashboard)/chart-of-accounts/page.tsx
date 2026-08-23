@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import { getChartOfAccounts, deleteChartOfAccount } from "@/actions/chart-of-accounts";
 import Link from "next/link";
 import ChartOfAccountCsvImport from "./ChartOfAccountCsvImport";
+import PageLoading from "@/components/PageLoading";
 
 type Account = Awaited<ReturnType<typeof getChartOfAccounts>>[number];
 
@@ -81,7 +82,7 @@ export default function ChartOfAccountsPage() {
       </div>
 
       {loading ? (
-        <div className="text-gray-400 text-sm">กำลังโหลด...</div>
+        <PageLoading />
       ) : accounts.length === 0 ? (
         <div className="text-center text-gray-400 text-sm py-16 bg-white rounded-xl border border-gray-200">
           ยังไม่มีข้อมูลผังบัญชี

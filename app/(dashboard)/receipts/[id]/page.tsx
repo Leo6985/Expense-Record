@@ -7,6 +7,7 @@ import { getReceipt, getAdjacentReceiptIds, approveReceipt, unapproveReceipt, ca
 import { formatDate, formatCurrency } from "@/lib/utils";
 import Link from "next/link";
 import DocNav from "@/components/DocNav";
+import PageLoading from "@/components/PageLoading";
 
 const statusConfig: Record<string, { label: string; color: string }> = {
   DRAFT: { label: "ร่าง", color: "bg-gray-100 text-gray-700" },
@@ -36,7 +37,7 @@ export default function ReceiptDetailPage() {
     getAdjacentReceiptIds(params.id as string).then(setAdjacent);
   }, [params.id]);
 
-  if (!receipt) return <div className="text-gray-400 text-sm">กำลังโหลด...</div>;
+  if (!receipt) return <PageLoading />;
 
   const s = statusConfig[receipt.status] ?? { label: receipt.status, color: "bg-gray-100 text-gray-700" };
 

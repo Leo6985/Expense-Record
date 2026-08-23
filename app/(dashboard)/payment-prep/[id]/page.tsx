@@ -8,6 +8,7 @@ import { getCompanyBankAccounts, createPayment, deletePayment } from "@/actions/
 import { formatDate, formatCurrency } from "@/lib/utils";
 import Link from "next/link";
 import DocNav from "@/components/DocNav";
+import PageLoading from "@/components/PageLoading";
 
 const statusConfig: Record<string, { label: string; color: string }> = {
   DRAFT: { label: "ร่าง", color: "bg-gray-100 text-gray-700" },
@@ -46,7 +47,7 @@ export default function PaymentPrepDetailPage() {
   const u = session?.user as { level?: string; role?: string } | undefined;
   const isManager = u?.level === "MANAGER" || u?.role === "OWNER";
 
-  if (!prep) return <div className="text-gray-400 text-sm">กำลังโหลด...</div>;
+  if (!prep) return <PageLoading />;
 
   const s = statusConfig[prep.status] ?? { label: prep.status, color: "bg-gray-100 text-gray-700" };
 

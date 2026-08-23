@@ -90,9 +90,12 @@ export async function getDebitCreditNote(id: string) {
 // Sequences by the highest existing number for this month's prefix (per type), not by row
 // count — count() collides with an existing number once any row in the middle of the
 // sequence has been deleted, causing the create to fail with a unique-constraint error.
-export async function getNextNoteNumber(type: "DEBIT" | "CREDIT") {
-  const year = String(new Date().getFullYear() + 543).slice(-2);
-  const month = String(new Date().getMonth() + 1).padStart(2, "0");
+// Numbered by the note's own document date (noteDate), not the date it's created in the
+// system, using the Gregorian/ค.ศ. year to match every other document series in this app
+// (PO/GR/AP/PaymentPrep/Payment) — receipts are the one exception, kept on พ.ศ. as before.
+export async function getNextNoteNumber(type: "DEBIT" | "CREDIT", noteDate: Date) {
+  const year = String(noteDate.getUTCFullYear());
+  const month = String(noteDate.getUTCMonth() + 1).padStart(2, "0");
   const prefix = `${TYPE_PREFIX[type]}${year}${month}`;
   const last = await prisma.debitCreditNote.findFirst({
     where: { noteNumber: { startsWith: prefix } },
@@ -121,7 +124,7 @@ export async function createDebitCreditNote(data: {
   if (invoice.status === "CANCELLED") throw new Error("ไม่สามารถออกใบเพิ่ม/ลดหนี้ให้ใบกำกับภาษีที่ยกเลิกแล้วได้");
   if (data.amount <= 0) throw new Error("จำนวนเงินต้องมากกว่า 0");
 
-  const noteNumber = await getNextNoteNumber(data.type);
+  const noteNumber = await getNextNoteNumber(data.type, new Date(data.noteDate));
   const vatAmount = data.vatAmount ?? 0;
   const totalAmount = Math.round((data.amount + vatAmount) * 100) / 100;
 

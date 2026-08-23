@@ -5,6 +5,7 @@ import { useParams, useRouter } from "next/navigation";
 import { getGoodsReceiptForEdit, updateGoodsReceipt } from "@/actions/goods-receipts";
 import { formatCurrency } from "@/lib/utils";
 import Link from "next/link";
+import PageLoading from "@/components/PageLoading";
 
 type GR = Awaited<ReturnType<typeof getGoodsReceiptForEdit>>;
 
@@ -45,7 +46,7 @@ export default function EditGoodsReceiptPage() {
     });
   }, [params.id]);
 
-  if (!gr) return <div className="text-gray-400 text-sm">กำลังโหลด...</div>;
+  if (!gr) return <PageLoading />;
 
   const ap = gr.accountsPayable[0];
   const hasActivePrep = ap?.paymentPrepItems.some((item) => item.prep.status !== "CANCELLED") ?? false;

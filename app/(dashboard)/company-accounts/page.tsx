@@ -10,6 +10,7 @@ import { getReceiptsForBankAccount } from "@/actions/receipts";
 import { formatDate, formatCurrency } from "@/lib/utils";
 import Link from "next/link";
 import CompanyBankAccountCsvImport from "./CompanyBankAccountCsvImport";
+import PageLoading from "@/components/PageLoading";
 
 type Account = {
   id: string;
@@ -251,7 +252,7 @@ export default function CompanyAccountsPage() {
                 {isExpanded && (
                   <div className="border-t border-gray-100 bg-gray-50 px-4 py-3">
                     {historyLoading === acct.id ? (
-                      <p className="text-sm text-gray-400 text-center py-3">กำลังโหลด...</p>
+                      <PageLoading compact />
                     ) : !receipts || receipts.length === 0 ? (
                       <p className="text-sm text-gray-400 text-center py-3">ยังไม่มีประวัติรับเงินในบัญชีนี้</p>
                     ) : (

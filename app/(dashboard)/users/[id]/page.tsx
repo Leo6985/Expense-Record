@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import { useRouter, useParams } from "next/navigation";
 import { getUser, updateUser } from "@/actions/users";
 import Link from "next/link";
+import PageLoading from "@/components/PageLoading";
 
 export default function EditUserPage() {
   const router = useRouter();
@@ -50,7 +51,7 @@ export default function EditUserPage() {
     }
   }
 
-  if (fetching) return <div className="text-gray-500">กำลังโหลด...</div>;
+  if (fetching) return <PageLoading />;
 
   return (
     <div className="max-w-lg">

@@ -112,9 +112,12 @@ export async function getPayment(id: string) {
 // Sequences by the highest existing number for this month's prefix, not by row count —
 // count() collides with an existing number once any row in the middle of the sequence
 // has been deleted, causing the create to fail with a unique-constraint error.
-export async function getNextPaymentNumber() {
-  const year = String(new Date().getFullYear());
-  const month = String(new Date().getMonth() + 1).padStart(2, "0");
+// Numbered by the payment's actual paymentDate, not the date it's recorded in the system,
+// so a payment entered late still slots into the sequence for the month it was paid
+// (mirrors getNextReceiptNumber in actions/receipts.ts).
+export async function getNextPaymentNumber(paymentDate: Date) {
+  const year = String(paymentDate.getUTCFullYear());
+  const month = String(paymentDate.getUTCMonth() + 1).padStart(2, "0");
   const prefix = `PAY${year}${month}`;
   const last = await prisma.payment.findFirst({
     where: { paymentNumber: { startsWith: prefix } },
@@ -137,7 +140,7 @@ export async function createPayment(data: {
   const createdByName = (session?.user as { name?: string })?.name ?? "";
   const createdById = (session?.user as { id?: string })?.id ?? "";
 
-  const paymentNumber = await getNextPaymentNumber();
+  const paymentNumber = await getNextPaymentNumber(new Date(data.paymentDate));
 
   const prepBefore = await prisma.paymentPrep.findUniqueOrThrow({
     where: { id: data.prepId },

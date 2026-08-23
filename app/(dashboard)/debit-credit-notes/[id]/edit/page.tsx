@@ -5,6 +5,7 @@ import { useParams, useRouter } from "next/navigation";
 import { getDebitCreditNote, updateDebitCreditNote } from "@/actions/debit-credit-notes";
 import NoteForm, { NoteFormInitial, NoteFormValues } from "../../NoteForm";
 import Link from "next/link";
+import PageLoading from "@/components/PageLoading";
 
 type Note = Awaited<ReturnType<typeof getDebitCreditNote>>;
 
@@ -21,7 +22,7 @@ export default function EditDebitCreditNotePage() {
     });
   }, [params.id]);
 
-  if (!note) return <div className="text-gray-400 text-sm">กำลังโหลด...</div>;
+  if (!note) return <PageLoading />;
 
   if (locked) {
     return (

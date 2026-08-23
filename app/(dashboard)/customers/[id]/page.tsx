@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 import { getCustomer, updateCustomer } from "@/actions/customers";
 import Link from "next/link";
+import PageLoading from "@/components/PageLoading";
 
 type Customer = {
   id: string;
@@ -30,7 +31,7 @@ export default function CustomerDetailPage() {
   }, [params.id]);
 
   if (!customer) {
-    return <div className="text-gray-400 text-sm">กำลังโหลด...</div>;
+    return <PageLoading />;
   }
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {

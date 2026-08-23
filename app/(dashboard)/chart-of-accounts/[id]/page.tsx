@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { getChartOfAccount, updateChartOfAccount } from "@/actions/chart-of-accounts";
 import Link from "next/link";
+import PageLoading from "@/components/PageLoading";
 
 type Account = Awaited<ReturnType<typeof getChartOfAccount>>;
 
@@ -26,7 +27,7 @@ export default function EditChartOfAccountPage() {
     getChartOfAccount(params.id as string).then(setAccount);
   }, [params.id]);
 
-  if (!account) return <div className="text-gray-400 text-sm">กำลังโหลด...</div>;
+  if (!account) return <PageLoading />;
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();

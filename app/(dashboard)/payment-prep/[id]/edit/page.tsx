@@ -5,6 +5,7 @@ import { useParams, useRouter } from "next/navigation";
 import { getPaymentPrep, updatePaymentPrep } from "@/actions/payment-prep";
 import PaymentPrepForm, { PaymentPrepFormInitial, PaymentPrepFormValues } from "../../PaymentPrepForm";
 import Link from "next/link";
+import PageLoading from "@/components/PageLoading";
 
 type Prep = Awaited<ReturnType<typeof getPaymentPrep>>;
 
@@ -21,7 +22,7 @@ export default function EditPaymentPrepPage() {
     });
   }, [params.id]);
 
-  if (!prep) return <div className="text-gray-400 text-sm">กำลังโหลด...</div>;
+  if (!prep) return <PageLoading />;
 
   if (notFoundOrLocked) {
     return (

@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { getPurchaseOrder, updatePurchaseOrder } from "@/actions/purchase-orders";
 import PurchaseOrderForm, { PurchaseOrderFormInitial } from "../../PurchaseOrderForm";
+import PageLoading from "@/components/PageLoading";
 
 type PO = Awaited<ReturnType<typeof getPurchaseOrder>>;
 
@@ -26,7 +27,7 @@ export default function EditPurchaseOrderPage() {
     });
   }, [params.id, router]);
 
-  if (!po) return <div className="text-gray-400 text-sm">กำลังโหลด...</div>;
+  if (!po) return <PageLoading />;
 
   const initialValues: PurchaseOrderFormInitial = {
     vendorId: po.vendorId,

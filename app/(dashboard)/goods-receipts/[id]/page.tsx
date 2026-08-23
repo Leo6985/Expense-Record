@@ -6,6 +6,7 @@ import { getGoodsReceipt, getAdjacentGoodsReceiptIds, deleteGoodsReceipt } from 
 import { formatDate, formatCurrency } from "@/lib/utils";
 import Link from "next/link";
 import DocNav from "@/components/DocNav";
+import PageLoading from "@/components/PageLoading";
 
 type GR = Awaited<ReturnType<typeof getGoodsReceipt>>;
 
@@ -25,7 +26,7 @@ export default function GoodsReceiptDetailPage() {
     getAdjacentGoodsReceiptIds(params.id as string).then(setAdjacent);
   }, [params.id]);
 
-  if (!gr) return <div className="text-gray-400 text-sm">กำลังโหลด...</div>;
+  if (!gr) return <PageLoading />;
 
   const ap = gr.accountsPayable[0];
   const hasActivePrep = ap?.paymentPrepItems.some((item) => item.prep.status !== "CANCELLED") ?? false;

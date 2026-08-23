@@ -5,6 +5,7 @@ import { getOverdueAPReport } from "@/actions/reports";
 import { formatDate, formatCurrency } from "@/lib/utils";
 import { downloadCSV } from "@/lib/csv";
 import Link from "next/link";
+import PageLoading from "@/components/PageLoading";
 
 type AP = Awaited<ReturnType<typeof getOverdueAPReport>>[number];
 
@@ -32,7 +33,7 @@ export default function OverdueAPPage() {
     getOverdueAPReport().then(setAPs);
   }, []);
 
-  if (aps === null) return <div className="text-gray-400 text-sm">กำลังโหลด...</div>;
+  if (aps === null) return <PageLoading />;
 
   const totalAmount = aps.reduce((s, ap) => s + ap.totalAmount, 0);
 

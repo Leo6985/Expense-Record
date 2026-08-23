@@ -5,6 +5,7 @@ import { getOutstandingAPReport } from "@/actions/reports";
 import { formatDate, formatCurrency } from "@/lib/utils";
 import { downloadCSV } from "@/lib/csv";
 import Link from "next/link";
+import PageLoading from "@/components/PageLoading";
 
 type AP = Awaited<ReturnType<typeof getOutstandingAPReport>>[number];
 
@@ -27,7 +28,7 @@ export default function OutstandingAPPage() {
     getOutstandingAPReport().then(setAPs);
   }, []);
 
-  if (aps === null) return <div className="text-gray-400 text-sm">กำลังโหลด...</div>;
+  if (aps === null) return <PageLoading />;
 
   const filtered = vendorFilter
     ? aps.filter((ap) => ap.vendor.name.toLowerCase().includes(vendorFilter.toLowerCase()))

@@ -5,6 +5,7 @@ import { useParams, useRouter } from "next/navigation";
 import { getProduct, updateProduct } from "@/actions/products";
 import { getChartOfAccounts } from "@/actions/chart-of-accounts";
 import Link from "next/link";
+import PageLoading from "@/components/PageLoading";
 
 type Product = Awaited<ReturnType<typeof getProduct>>;
 type Account = Awaited<ReturnType<typeof getChartOfAccounts>>[number];
@@ -22,7 +23,7 @@ export default function EditProductPage() {
     getChartOfAccounts().then((data) => setAccounts(data.filter((a) => a.isActive)));
   }, [params.id]);
 
-  if (!product) return <div className="text-gray-400 text-sm">กำลังโหลด...</div>;
+  if (!product) return <PageLoading />;
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();

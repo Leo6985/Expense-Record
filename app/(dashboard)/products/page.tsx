@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import { getProducts, deleteProduct } from "@/actions/products";
 import Link from "next/link";
 import ProductCsvImport from "./ProductCsvImport";
+import PageLoading from "@/components/PageLoading";
 
 type Product = Awaited<ReturnType<typeof getProducts>>[number];
 
@@ -79,7 +80,7 @@ export default function ProductsPage() {
       </div>
 
       {loading ? (
-        <div className="text-gray-400 text-sm">กำลังโหลด...</div>
+        <PageLoading />
       ) : filtered.length === 0 ? (
         <div className="text-center text-gray-400 text-sm py-16 bg-white rounded-xl border border-gray-200">
           ยังไม่มีข้อมูลสินค้า

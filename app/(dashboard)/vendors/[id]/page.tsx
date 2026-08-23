@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useRouter, useParams } from "next/navigation";
 import { getVendor, updateVendor } from "@/actions/vendors";
 import Link from "next/link";
+import PageLoading from "@/components/PageLoading";
 
 type Vendor = {
   id: string;
@@ -35,7 +36,7 @@ export default function VendorDetailPage() {
   }, [params.id]);
 
   if (!vendor) {
-    return <div className="text-gray-400 text-sm">กำลังโหลด...</div>;
+    return <PageLoading />;
   }
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
