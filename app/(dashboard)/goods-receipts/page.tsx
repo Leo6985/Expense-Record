@@ -27,10 +27,10 @@ export default async function GoodsReceiptsPage() {
           <table className="w-full text-sm">
             <thead>
               <tr className="bg-gray-50 border-b border-gray-200">
+                <th className="text-left px-4 py-3 font-medium text-gray-600">วันที่รับ</th>
                 <th className="text-left px-4 py-3 font-medium text-gray-600">เลข GR</th>
                 <th className="text-left px-4 py-3 font-medium text-gray-600">เลข PO</th>
                 <th className="text-left px-4 py-3 font-medium text-gray-600">ผู้ขาย</th>
-                <th className="text-left px-4 py-3 font-medium text-gray-600">วันที่รับ</th>
                 <th className="text-left px-4 py-3 font-medium text-gray-600">วันที่ใบกำกับภาษี</th>
                 <th className="text-right px-4 py-3 font-medium text-gray-600">มูลค่าใบรับ (รวม VAT)</th>
                 <th className="text-left px-4 py-3 font-medium text-gray-600">ผู้รับ</th>
@@ -48,6 +48,7 @@ export default async function GoodsReceiptsPage() {
                   const ap = gr.accountsPayable[0];
                   return (
                     <tr key={gr.id} className="border-b border-gray-100 hover:bg-gray-50">
+                      <td className="px-4 py-3 text-gray-600">{formatDate(gr.receivedDate)}</td>
                       <td className="px-4 py-3">
                         <Link href={`/goods-receipts/${gr.id}`} className="font-mono text-green-700 hover:underline">
                           {gr.grNumber}
@@ -59,7 +60,6 @@ export default async function GoodsReceiptsPage() {
                         </Link>
                       </td>
                       <td className="px-4 py-3 font-medium">{gr.po.vendor.name}</td>
-                      <td className="px-4 py-3 text-gray-600">{formatDate(gr.receivedDate)}</td>
                       <td className="px-4 py-3 text-gray-600">{ap ? formatDate(ap.invoiceDate) : "-"}</td>
                       <td className="px-4 py-3 text-right font-medium">฿{formatCurrency(ap?.totalAmount ?? 0)}</td>
                       <td className="px-4 py-3 text-gray-600">{gr.receivedBy || "-"}</td>
