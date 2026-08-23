@@ -258,6 +258,25 @@ export async function cancelDebitCreditNote(id: string) {
   revalidatePath(`/sales-invoices/${existing.invoiceId}`);
 }
 
+// Hard-deletes a debit/credit note — unlike cancelDebitCreditNote (which keeps the record as
+// an audit trail with status CANCELLED), this removes it entirely. Only safe while DRAFT:
+// getEffectiveInvoiceTotal only ever counts APPROVED notes, so a DRAFT note never affected any
+// invoice's reconciled total/status and no syncInvoiceStatus call is needed on delete.
+export async function deleteDebitCreditNote(id: string) {
+  const existing = await prisma.debitCreditNote.findUnique({ where: { id } });
+  if (!existing) return;
+  if (existing.status !== "DRAFT") throw new Error("ลบได้เฉพาะรายการที่ยังไม่อนุมัติเท่านั้น");
+
+  await prisma.debitCreditNote.delete({ where: { id } });
+  try {
+    await debitCreditNotesTable.delete(id);
+  } catch (err) {
+    console.error("Sheet cleanup failed after deleteDebitCreditNote:", err);
+  }
+
+  revalidatePath("/debit-credit-notes");
+}
+
 // Any non-cancelled sales invoice can be referenced, including ones already fully RECEIVED —
 // debit/credit notes are corrections and may need to be issued after settlement.
 export async function searchInvoicesForNote(search: string) {

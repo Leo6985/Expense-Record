@@ -118,7 +118,7 @@ export default function SalesInvoiceCsvImport() {
   const [parseError, setParseError] = useState("");
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<ImportResult | null>(null);
-  const [toast, setToast] = useState<string | null>(null);
+  const [showComplete, setShowComplete] = useState(false);
 
   async function handleFile(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
@@ -150,10 +150,7 @@ export default function SalesInvoiceCsvImport() {
       const res = await importSalesInvoicesCSV(rows);
       setResult(res);
       setRows([]);
-      setToast(
-        `นำเข้าข้อมูลใบกำกับภาษีขายเสร็จแล้ว — สร้างใหม่ ${res.created} รายการ · อัปเดต ${res.updated} รายการ`
-      );
-      setTimeout(() => setToast(null), 5000);
+      setShowComplete(true);
     } finally {
       setLoading(false);
     }
@@ -164,6 +161,7 @@ export default function SalesInvoiceCsvImport() {
     setRows([]);
     setResult(null);
     setParseError("");
+    setShowComplete(false);
   }
 
   return (
@@ -175,17 +173,36 @@ export default function SalesInvoiceCsvImport() {
         นำเข้าข้อมูลการขาย
       </button>
 
-      {toast && (
-        <div className="fixed top-4 right-4 z-[60] bg-green-600 text-white px-4 py-3 rounded-lg shadow-lg text-sm flex items-center gap-2">
-          <span>✓</span>
-          <span>{toast}</span>
-          <button onClick={() => setToast(null)} className="ml-2 text-green-100 hover:text-white leading-none">✕</button>
+      {showComplete && result && (
+        <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/40">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm mx-4 p-6 text-center">
+            <div className="mx-auto mb-3 flex items-center justify-center w-14 h-14 rounded-full bg-green-100 text-green-600 text-3xl">
+              ✓
+            </div>
+            <h3 className="text-lg font-bold text-gray-900 mb-1">อัพโหลดข้อมูลสมบูรณ์</h3>
+            <p className="text-sm text-gray-500 mb-5">
+              สร้างใหม่ {result.created} รายการ · อัปเดต {result.updated} รายการ
+              {result.customersCreated > 0 && <> · สร้างลูกค้าใหม่ {result.customersCreated} ราย</>}
+            </p>
+            <button
+              onClick={() => setShowComplete(false)}
+              className="bg-green-600 text-white px-6 py-2 rounded-lg text-sm font-medium hover:bg-green-700 transition-colors"
+            >
+              ตกลง
+            </button>
+          </div>
         </div>
       )}
 
       {open && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
-          <div className="bg-white rounded-2xl shadow-xl w-full max-w-4xl mx-4 max-h-[90vh] flex flex-col">
+          <div className="relative bg-white rounded-2xl shadow-xl w-full max-w-4xl mx-4 max-h-[90vh] flex flex-col">
+            {loading && (
+              <div className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-3 bg-white/90 rounded-2xl">
+                <div className="w-10 h-10 border-4 border-gray-200 border-t-blue-600 rounded-full animate-spin" />
+                <p className="text-sm text-gray-600 font-medium">กำลังอัปโหลดข้อมูล...</p>
+              </div>
+            )}
             <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200">
               <h2 className="text-lg font-bold text-gray-900">นำเข้าข้อมูลใบกำกับภาษีขาย</h2>
               <button onClick={handleClose} className="text-gray-400 hover:text-gray-600 text-xl leading-none">✕</button>

@@ -1,8 +1,8 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useParams } from "next/navigation";
-import { getSalesInvoiceById, getAdjacentSalesInvoiceIds, cancelSalesInvoice } from "@/actions/sales-invoices";
+import { useParams, useRouter } from "next/navigation";
+import { getSalesInvoiceById, getAdjacentSalesInvoiceIds, cancelSalesInvoice, deleteSalesInvoice } from "@/actions/sales-invoices";
 import { formatDate, formatCurrency } from "@/lib/utils";
 import Link from "next/link";
 import DocNav from "@/components/DocNav";
@@ -29,6 +29,7 @@ type Invoice = Awaited<ReturnType<typeof getSalesInvoiceById>>;
 
 export default function SalesInvoiceDetailPage() {
   const params = useParams();
+  const router = useRouter();
   const [invoice, setInvoice] = useState<Invoice>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -68,6 +69,19 @@ export default function SalesInvoiceDetailPage() {
     setLoading(false);
   }
 
+  async function handleDelete() {
+    if (!confirm(`ลบใบกำกับภาษีขาย "${invoice!.invoiceNumber}" ใช่หรือไม่? ไม่สามารถกู้คืนได้`)) return;
+    setLoading(true);
+    setError("");
+    try {
+      await deleteSalesInvoice(invoice!.id);
+      router.push("/sales-invoices");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "เกิดข้อผิดพลาด");
+      setLoading(false);
+    }
+  }
+
   return (
     <div className="max-w-2xl">
       <div className="flex items-center gap-3 mb-6">
@@ -93,8 +107,8 @@ export default function SalesInvoiceDetailPage() {
         <div className="mb-4 bg-red-50 border border-red-200 text-red-700 rounded-lg px-4 py-3 text-sm">{error}</div>
       )}
 
-      {canCancel && (
-        <div className="flex gap-2 mb-5">
+      <div className="flex gap-2 mb-5">
+        {canCancel && (
           <button
             onClick={handleCancel}
             disabled={loading}
@@ -102,13 +116,36 @@ export default function SalesInvoiceDetailPage() {
           >
             ยกเลิก
           </button>
-        </div>
-      )}
+        )}
+        <button
+          onClick={handleDelete}
+          disabled={loading}
+          className="border border-red-400 text-red-700 bg-red-50 px-4 py-2 rounded-lg text-sm font-medium hover:bg-red-100 disabled:opacity-50 transition-colors"
+        >
+          🗑️ ลบ
+        </button>
+      </div>
 
       <div className="bg-white rounded-xl border border-gray-200 p-5 mb-5">
         <h2 className="font-semibold text-gray-900 mb-4 pb-2 border-b border-gray-100">ข้อมูลใบกำกับภาษี</h2>
         <div className="grid grid-cols-2 gap-4 text-sm">
-          <InfoRow label="ลูกค้า" value={invoice.customer.name} />
+          <div>
+            <div className="text-xs text-gray-500 mb-0.5">ลูกค้า</div>
+            <div className="font-medium text-gray-900">
+              <Link href={`/customers/${invoice.customerId}`} className="hover:underline">
+                {invoice.customer.name}
+              </Link>
+              {invoice.customer.creditDays == null && (
+                <Link
+                  href={`/customers/${invoice.customerId}`}
+                  title="ไม่มีข้อมูลเครดิตของลูกค้านี้ กดเพื่อไปแก้ไข"
+                  className="ml-2 inline-flex items-center px-1.5 py-0.5 rounded-full text-[11px] font-medium bg-amber-100 text-amber-700 hover:bg-amber-200 align-middle"
+                >
+                  ⚠ ไม่มีข้อมูลเครดิต
+                </Link>
+              )}
+            </div>
+          </div>
           <InfoRow label="วันที่ใบกำกับภาษี" value={formatDate(invoice.invoiceDate)} />
           <InfoRow label="กำหนดชำระ" value={formatDate(invoice.dueDate)} highlight={isOverdue} />
           {invoice.notes && <InfoRow label="หมายเหตุ" value={invoice.notes} />}

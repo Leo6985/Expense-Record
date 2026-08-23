@@ -21,8 +21,9 @@ export default function NewCustomerPage() {
     setError("");
 
     const form = new FormData(e.currentTarget);
-    const creditDaysRaw = parseInt(form.get("creditDays") as string);
-    const creditDays = Number.isNaN(creditDaysRaw) ? 30 : creditDaysRaw;
+    const creditDaysInput = (form.get("creditDays") as string)?.trim();
+    const creditDaysRaw = creditDaysInput ? parseInt(creditDaysInput) : undefined;
+    const creditDays = creditDaysRaw !== undefined && !Number.isNaN(creditDaysRaw) ? creditDaysRaw : undefined;
 
     try {
       await createCustomer({
@@ -57,7 +58,7 @@ export default function NewCustomerPage() {
             <Field key={nextCode} label="รหัสลูกค้า *" name="code" required placeholder="C00001" defaultValue={nextCode} />
             <Field label="ชื่อลูกค้า *" name="name" required placeholder="บริษัท ตัวอย่าง จำกัด" />
             <Field label="เลขประจำตัวผู้เสียภาษี" name="taxId" placeholder="0000000000000" />
-            <Field label="เครดิต (วัน)" name="creditDays" type="number" defaultValue="30" />
+            <Field label="เครดิต (วัน)" name="creditDays" type="number" placeholder="เช่น 30" />
           </div>
           <Field label="ที่อยู่" name="address" placeholder="เลขที่ ถนน แขวง/ตำบล เขต/อำเภอ จังหวัด รหัสไปรษณีย์" />
         </Section>

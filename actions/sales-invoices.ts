@@ -9,9 +9,13 @@ import { getEffectiveInvoiceTotal } from "@/lib/sales-invoice-reconciliation";
 
 const AMOUNT_TOLERANCE = 0.01;
 
-function computeDueDate(invoiceDate: Date, creditDays: number): Date {
+// `creditDays` is null for a customer whose credit terms haven't been set yet (e.g. one
+// auto-created by this file's CSV import). Falls back to 30 days so a dueDate can still be
+// computed — this fallback is display-only and does NOT get written back onto the customer;
+// the sales-invoices/customers UI separately flags such customers as missing credit data.
+function computeDueDate(invoiceDate: Date, creditDays: number | null): Date {
   const due = new Date(invoiceDate);
-  due.setDate(due.getDate() + creditDays);
+  due.setDate(due.getDate() + (creditDays ?? 30));
   return due;
 }
 
@@ -122,7 +126,22 @@ export async function syncInvoiceStatus(tx: Prisma.TransactionClient, invoiceId:
   }
 }
 
-export async function getSalesInvoices(search?: string, status?: string) {
+// `month` is a "YYYY-MM" string (e.g. from an <input type="month">) filtering invoiceDate to
+// that calendar month, in UTC — matching how dates are parsed/stored elsewhere in this file.
+function monthRange(month: string): { gte: Date; lt: Date } | null {
+  const match = month.match(/^(\d{4})-(\d{2})$/);
+  if (!match) return null;
+  const [, y, m] = match;
+  const year = Number(y);
+  const monthIndex = Number(m) - 1;
+  return {
+    gte: new Date(Date.UTC(year, monthIndex, 1)),
+    lt: new Date(Date.UTC(year, monthIndex + 1, 1)),
+  };
+}
+
+export async function getSalesInvoices(search?: string, status?: string, month?: string) {
+  const range = month ? monthRange(month) : null;
   return prisma.salesInvoice.findMany({
     where: {
       ...(search
@@ -134,8 +153,9 @@ export async function getSalesInvoices(search?: string, status?: string) {
           }
         : {}),
       ...(status ? { status } : {}),
+      ...(range ? { invoiceDate: range } : {}),
     },
-    include: { customer: { select: { name: true, code: true } } },
+    include: { customer: { select: { name: true, code: true, creditDays: true } } },
     orderBy: { invoiceDate: "desc" },
   });
 }
@@ -204,6 +224,34 @@ export async function cancelSalesInvoice(id: string) {
 
   revalidatePath("/sales-invoices");
   revalidatePath(`/sales-invoices/${id}`);
+}
+
+// Hard-deletes a sales invoice — unlike cancelSalesInvoice (which keeps the record as an
+// audit trail with status CANCELLED), this removes it entirely. Only safe when nothing else
+// references it: ReceiptItem.invoiceId and DebitCreditNote.invoiceId both have no
+// onDelete: Cascade, so Postgres would reject this anyway — checking counts first just gives
+// a clear Thai error instead of a raw FK-constraint failure.
+export async function deleteSalesInvoice(id: string) {
+  const invoice = await prisma.salesInvoice.findUnique({
+    where: { id },
+    include: { _count: { select: { receiptItems: true, debitCreditNotes: true } } },
+  });
+  if (!invoice) return;
+
+  if (invoice._count.receiptItems > 0 || invoice._count.debitCreditNotes > 0) {
+    throw new Error(
+      `ไม่สามารถลบใบกำกับภาษีขาย "${invoice.invoiceNumber}" ได้ เนื่องจากมีการตัดชำระหรือใบเพิ่ม/ลดหนี้ผูกอยู่ กรุณายกเลิกรายการเหล่านั้นก่อน`
+    );
+  }
+
+  await prisma.salesInvoice.delete({ where: { id } });
+  try {
+    await salesInvoicesTable.delete(id);
+  } catch (err) {
+    console.error("Sheet cleanup failed after deleteSalesInvoice:", err);
+  }
+
+  revalidatePath("/sales-invoices");
 }
 
 type ImportRow = {

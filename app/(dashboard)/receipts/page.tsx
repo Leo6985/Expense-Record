@@ -1,6 +1,7 @@
 import { getReceipts } from "@/actions/receipts";
 import Link from "next/link";
 import { formatDate, formatCurrency } from "@/lib/utils";
+import DeleteReceiptButton from "./DeleteReceiptButton";
 
 const statusConfig: Record<string, { label: string; color: string }> = {
   DRAFT: { label: "ร่าง", color: "bg-gray-100 text-gray-700" },
@@ -40,12 +41,13 @@ export default async function ReceiptsPage() {
                 <th className="text-right px-4 py-3 font-medium text-gray-600">จำนวนเงิน</th>
                 <th className="text-right px-4 py-3 font-medium text-gray-600">ขาด/เกิน</th>
                 <th className="text-left px-4 py-3 font-medium text-gray-600">สถานะ</th>
+                <th className="text-right px-4 py-3 font-medium text-gray-600">จัดการ</th>
               </tr>
             </thead>
             <tbody>
               {receipts.length === 0 ? (
                 <tr>
-                  <td colSpan={7} className="px-4 py-8 text-center text-gray-400">ไม่พบข้อมูล</td>
+                  <td colSpan={8} className="px-4 py-8 text-center text-gray-400">ไม่พบข้อมูล</td>
                 </tr>
               ) : (
                 receipts.map((r) => {
@@ -69,6 +71,11 @@ export default async function ReceiptsPage() {
                         <span className={`inline-flex px-2 py-0.5 rounded-full text-xs font-medium ${s.color}`}>
                           {s.label}
                         </span>
+                      </td>
+                      <td className="px-4 py-3 text-right">
+                        {r.status === "DRAFT" && (
+                          <DeleteReceiptButton receiptId={r.id} receiptNumber={r.receiptNumber} />
+                        )}
                       </td>
                     </tr>
                   );

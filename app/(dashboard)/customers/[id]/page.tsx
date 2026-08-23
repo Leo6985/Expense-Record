@@ -14,7 +14,7 @@ type Customer = {
   contactPerson: string | null;
   phone: string | null;
   email: string | null;
-  creditDays: number;
+  creditDays: number | null;
   isActive: boolean;
 };
 
@@ -40,8 +40,9 @@ export default function CustomerDetailPage() {
     setSuccess(false);
 
     const form = new FormData(e.currentTarget);
-    const creditDaysRaw = parseInt(form.get("creditDays") as string);
-    const creditDays = Number.isNaN(creditDaysRaw) ? 30 : creditDaysRaw;
+    const creditDaysInput = (form.get("creditDays") as string)?.trim();
+    const creditDaysRaw = creditDaysInput ? parseInt(creditDaysInput) : undefined;
+    const creditDays = creditDaysRaw !== undefined && !Number.isNaN(creditDaysRaw) ? creditDaysRaw : null;
 
     try {
       await updateCustomer(params.id as string, {
@@ -76,7 +77,18 @@ export default function CustomerDetailPage() {
             <Field label="รหัสลูกค้า *" name="code" required defaultValue={customer.code} />
             <Field label="ชื่อลูกค้า *" name="name" required defaultValue={customer.name} />
             <Field label="เลขประจำตัวผู้เสียภาษี" name="taxId" defaultValue={customer.taxId ?? ""} />
-            <Field label="เครดิต (วัน)" name="creditDays" type="number" defaultValue={String(customer.creditDays)} />
+            <div>
+              <Field
+                label="เครดิต (วัน)"
+                name="creditDays"
+                type="number"
+                placeholder="เช่น 30"
+                defaultValue={customer.creditDays != null ? String(customer.creditDays) : ""}
+              />
+              {customer.creditDays == null && (
+                <p className="mt-1 text-xs text-amber-600">⚠ ยังไม่ระบุข้อมูลเครดิต</p>
+              )}
+            </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">สถานะ</label>
               <select
@@ -133,8 +145,8 @@ function Section({ title, children }: { title: string; children: React.ReactNode
   );
 }
 
-function Field({ label, name, type = "text", required, defaultValue }: {
-  label: string; name: string; type?: string; required?: boolean; defaultValue?: string;
+function Field({ label, name, type = "text", required, placeholder, defaultValue }: {
+  label: string; name: string; type?: string; required?: boolean; placeholder?: string; defaultValue?: string;
 }) {
   return (
     <div>
@@ -143,6 +155,7 @@ function Field({ label, name, type = "text", required, defaultValue }: {
         name={name}
         type={type}
         required={required}
+        placeholder={placeholder}
         defaultValue={defaultValue}
         className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
       />

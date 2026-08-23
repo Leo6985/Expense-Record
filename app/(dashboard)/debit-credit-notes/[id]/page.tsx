@@ -9,6 +9,7 @@ import {
   approveDebitCreditNote,
   unapproveDebitCreditNote,
   cancelDebitCreditNote,
+  deleteDebitCreditNote,
 } from "@/actions/debit-credit-notes";
 import { formatDate, formatCurrency } from "@/lib/utils";
 import Link from "next/link";
@@ -87,6 +88,19 @@ export default function DebitCreditNoteDetailPage() {
     router.push("/debit-credit-notes");
   }
 
+  async function handleDelete() {
+    if (!confirm(`ลบ "${note!.noteNumber}" ใช่หรือไม่? ไม่สามารถกู้คืนได้`)) return;
+    setLoading(true);
+    setError("");
+    try {
+      await deleteDebitCreditNote(note!.id);
+      router.push("/debit-credit-notes");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "เกิดข้อผิดพลาด");
+      setLoading(false);
+    }
+  }
+
   return (
     <div className="max-w-2xl">
       <div className="flex items-center gap-3 mb-6 flex-wrap">
@@ -128,6 +142,11 @@ export default function DebitCreditNoteDetailPage() {
         {(note.status === "DRAFT" || note.status === "APPROVED") && (
           <button onClick={handleCancel} disabled={loading} className="border border-red-300 text-red-600 px-4 py-2 rounded-lg text-sm font-medium hover:bg-red-50 disabled:opacity-50 transition-colors">
             ยกเลิก
+          </button>
+        )}
+        {note.status === "DRAFT" && (
+          <button onClick={handleDelete} disabled={loading} className="border border-red-400 text-red-700 bg-red-50 px-4 py-2 rounded-lg text-sm font-medium hover:bg-red-100 disabled:opacity-50 transition-colors">
+            🗑️ ลบ
           </button>
         )}
         <a

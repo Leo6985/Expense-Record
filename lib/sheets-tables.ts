@@ -450,7 +450,7 @@ export type CustomerRecord = {
   contactPerson: string | null;
   phone: string | null;
   email: string | null;
-  creditDays: number;
+  creditDays: number | null;
   isActive: boolean;
   createdAt: Date;
   updatedAt: Date;

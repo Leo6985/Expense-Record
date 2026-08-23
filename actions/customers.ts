@@ -19,7 +19,7 @@ async function syncCustomerToSheet(customer: {
   contactPerson: string | null;
   phone: string | null;
   email: string | null;
-  creditDays: number;
+  creditDays: number | null;
   isActive: boolean;
   createdAt: Date;
   updatedAt: Date;
@@ -63,7 +63,7 @@ export async function createCustomer(data: {
   contactPerson?: string;
   phone?: string;
   email?: string;
-  creditDays?: number;
+  creditDays?: number | null;
 }) {
   const existing = await prisma.customer.findUnique({ where: { code: data.code } });
   if (existing) throw new Error(`รหัสลูกค้า ${data.code} มีในระบบแล้ว`);
@@ -89,7 +89,7 @@ export async function updateCustomer(
     contactPerson?: string;
     phone?: string;
     email?: string;
-    creditDays?: number;
+    creditDays?: number | null;
     isActive?: boolean;
   }
 ) {
@@ -224,6 +224,9 @@ export async function findOrCreateCustomerByName(name: string) {
   if (existing) return { customer: existing, created: false };
 
   const code = await getNextCustomerCode();
+  // creditDays is intentionally omitted (left null) — a customer auto-created from a sales
+  // invoice import has no known credit terms yet, so the sales-invoices page flags it as
+  // missing credit data until someone fills it in on the customer edit page.
   const customer = await prisma.customer.create({ data: { code, name: trimmed } });
   try {
     await syncCustomerToSheet(customer);

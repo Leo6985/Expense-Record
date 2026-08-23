@@ -93,7 +93,7 @@ model Customer {
   contactPerson String?
   phone         String?
   email         String?
-  creditDays    Int      @default(30)
+  creditDays    Int?
   isActive      Boolean  @default(true)
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt

@@ -73,7 +73,17 @@ export default async function CustomersPage({
                         {customer.code}
                       </Link>
                     </td>
-                    <td className="px-4 py-3 font-medium">{customer.name}</td>
+                    <td className="px-4 py-3 font-medium">
+                      {customer.name}
+                      {customer.creditDays == null && (
+                        <span
+                          title="ยังไม่ระบุข้อมูลเครดิต"
+                          className="ml-2 inline-flex items-center px-1.5 py-0.5 rounded-full text-[11px] font-medium bg-amber-100 text-amber-700"
+                        >
+                          ⚠ ไม่มีข้อมูลเครดิต
+                        </span>
+                      )}
+                    </td>
                     <td className="px-4 py-3 text-gray-600">{customer.contactPerson || "-"}</td>
                     <td className="px-4 py-3 text-gray-600">{customer.email || "-"}</td>
                     <td className="px-4 py-3">

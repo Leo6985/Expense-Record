@@ -3,6 +3,7 @@ import Link from "next/link";
 import { formatDate, formatCurrency } from "@/lib/utils";
 import SalesInvoiceCsvImport from "./SalesInvoiceCsvImport";
 import CancelInvoiceButton from "./CancelInvoiceButton";
+import DeleteInvoiceButton from "./DeleteInvoiceButton";
 
 const statusConfig: Record<string, { label: string; color: string }> = {
   PENDING: { label: "รอรับชำระ", color: "bg-yellow-100 text-yellow-700" },
@@ -14,10 +15,10 @@ const statusConfig: Record<string, { label: string; color: string }> = {
 export default async function SalesInvoicesPage({
   searchParams,
 }: {
-  searchParams: Promise<{ q?: string; status?: string }>;
+  searchParams: Promise<{ q?: string; status?: string; month?: string }>;
 }) {
-  const { q, status } = await searchParams;
-  const invoices = await getSalesInvoices(q, status);
+  const { q, status, month } = await searchParams;
+  const invoices = await getSalesInvoices(q, status, month);
 
   return (
     <div>
@@ -50,9 +51,24 @@ export default async function SalesInvoicesPage({
                 <option key={k} value={k}>{v.label}</option>
               ))}
             </select>
+            <input
+              type="month"
+              name="month"
+              defaultValue={month ?? ""}
+              title="กรองตามเดือนของวันที่ใบกำกับภาษี"
+              className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
             <button type="submit" className="bg-gray-100 text-gray-700 px-4 py-2 rounded-lg text-sm hover:bg-gray-200">
               ค้นหา
             </button>
+            {(q || status || month) && (
+              <Link
+                href="/sales-invoices"
+                className="text-sm text-gray-500 hover:text-gray-700 self-center whitespace-nowrap"
+              >
+                ล้างตัวกรอง
+              </Link>
+            )}
           </form>
         </div>
 
@@ -87,7 +103,20 @@ export default async function SalesInvoicesPage({
                           {inv.invoiceNumber}
                         </Link>
                       </td>
-                      <td className="px-4 py-3 font-medium">{inv.customer.name}</td>
+                      <td className="px-4 py-3 font-medium">
+                        <Link href={`/customers/${inv.customerId}`} className="hover:underline">
+                          {inv.customer.name}
+                        </Link>
+                        {inv.customer.creditDays == null && (
+                          <Link
+                            href={`/customers/${inv.customerId}`}
+                            title="ไม่มีข้อมูลเครดิตของลูกค้านี้ กดเพื่อไปแก้ไข"
+                            className="ml-2 inline-flex items-center px-1.5 py-0.5 rounded-full text-[11px] font-medium bg-amber-100 text-amber-700 hover:bg-amber-200"
+                          >
+                            ⚠ ไม่มีข้อมูลเครดิต
+                          </Link>
+                        )}
+                      </td>
                       <td className="px-4 py-3 text-right text-gray-600">
                         {inv.discountAmount > 0 ? `฿${formatCurrency(inv.discountAmount)}` : "-"}
                       </td>
@@ -101,10 +130,11 @@ export default async function SalesInvoicesPage({
                           {isOverdue ? "เกินกำหนด" : s.label}
                         </span>
                       </td>
-                      <td className="px-4 py-3 text-right">
+                      <td className="px-4 py-3 text-right space-x-3">
                         {inv.status === "PENDING" && (
                           <CancelInvoiceButton invoiceId={inv.id} invoiceNumber={inv.invoiceNumber} />
                         )}
+                        <DeleteInvoiceButton invoiceId={inv.id} invoiceNumber={inv.invoiceNumber} />
                       </td>
                     </tr>
                   );
