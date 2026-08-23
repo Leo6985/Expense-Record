@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 import { getCustomer, updateCustomer } from "@/actions/customers";
+import { recomputeInvoiceDueDatesForCustomer } from "@/actions/sales-invoices";
 import Link from "next/link";
 import PageLoading from "@/components/PageLoading";
 
@@ -25,6 +26,7 @@ export default function CustomerDetailPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState(false);
+  const [dueDatesUpdated, setDueDatesUpdated] = useState(false);
 
   useEffect(() => {
     getCustomer(params.id as string).then(setCustomer);
@@ -39,11 +41,13 @@ export default function CustomerDetailPage() {
     setLoading(true);
     setError("");
     setSuccess(false);
+    setDueDatesUpdated(false);
 
     const form = new FormData(e.currentTarget);
     const creditDaysInput = (form.get("creditDays") as string)?.trim();
     const creditDaysRaw = creditDaysInput ? parseInt(creditDaysInput) : undefined;
     const creditDays = creditDaysRaw !== undefined && !Number.isNaN(creditDaysRaw) ? creditDaysRaw : null;
+    const creditDaysChanged = creditDays !== customer!.creditDays;
 
     try {
       await updateCustomer(params.id as string, {
@@ -57,6 +61,15 @@ export default function CustomerDetailPage() {
         creditDays,
         isActive: form.get("isActive") === "true",
       });
+
+      // กำหนดชำระของใบกำกับภาษีขายคำนวณจากระยะเครดิตของลูกค้า — เมื่อแก้ไขระยะเครดิตแล้ว
+      // ต้องปรับปรุงกำหนดชำระของใบกำกับภาษีขายที่มีอยู่เดิมให้ตรงกับค่าล่าสุดด้วย
+      if (creditDaysChanged) {
+        await recomputeInvoiceDueDatesForCustomer(params.id as string, creditDays);
+        setDueDatesUpdated(true);
+      }
+
+      setCustomer({ ...customer!, creditDays });
       setSuccess(true);
       setLoading(false);
     } catch (err) {
@@ -117,7 +130,10 @@ export default function CustomerDetailPage() {
           <div className="bg-red-50 border border-red-200 text-red-700 rounded-lg px-4 py-3 text-sm">{error}</div>
         )}
         {success && (
-          <div className="bg-green-50 border border-green-200 text-green-700 rounded-lg px-4 py-3 text-sm">บันทึกสำเร็จ</div>
+          <div className="bg-green-50 border border-green-200 text-green-700 rounded-lg px-4 py-3 text-sm">
+            บันทึกสำเร็จ
+            {dueDatesUpdated && " และปรับปรุงกำหนดชำระของใบกำกับภาษีขายที่เกี่ยวข้องแล้ว"}
+          </div>
         )}
 
         <div className="flex gap-3">

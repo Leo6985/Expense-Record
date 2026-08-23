@@ -94,6 +94,33 @@ export async function syncInvoicesToSheetById(invoiceIds: string[]) {
   await Promise.all(invoices.map((invoice) => syncInvoiceToSheet(invoice)));
 }
 
+// Called from the customer edit page right after updateCustomer, whenever creditDays actually
+// changed, so every one of that customer's still-active invoices' dueDate reflects the
+// customer's current credit terms instead of staying frozen at whatever was computed (or
+//30-day-defaulted) back when the invoice was imported. Skips CANCELLED invoices — their
+// dueDate is a moot historical field, same as cancelSalesInvoice never touching it.
+export async function recomputeInvoiceDueDatesForCustomer(customerId: string, creditDays: number | null) {
+  const invoices = await prisma.salesInvoice.findMany({
+    where: { customerId, status: { not: "CANCELLED" } },
+    select: { id: true, invoiceDate: true },
+  });
+  if (invoices.length === 0) return;
+
+  await Promise.all(
+    invoices.map((inv) =>
+      prisma.salesInvoice.update({
+        where: { id: inv.id },
+        data: { dueDate: computeDueDate(inv.invoiceDate, creditDays) },
+      })
+    )
+  );
+
+  await syncInvoicesToSheetById(invoices.map((inv) => inv.id));
+
+  revalidatePath("/sales-invoices");
+  for (const inv of invoices) revalidatePath(`/sales-invoices/${inv.id}`);
+}
+
 // Sums how much of an invoice's effective total (totalAmount adjusted by any APPROVED debit/
 // credit notes) has been committed to non-cancelled receipts, and reconciles invoice.status
 // against it. Called after any receipt or debit/credit note create/edit/approve/unapprove/
