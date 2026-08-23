@@ -57,6 +57,7 @@ export default function ProfitLossPage() {
   const closingValue = Number(closing) || 0;
   const cogs = report ? Math.round((openingValue + report.expenses - closingValue) * 100) / 100 : 0;
   const grossProfit = report ? Math.round((report.revenue - cogs) * 100) / 100 : 0;
+  const grossProfitMargin = report && report.revenue > 0 ? (grossProfit / report.revenue) * 100 : null;
 
   const periodLabel =
     periodType === "month" ? `${MONTH_NAMES[month - 1]} ${year + 543}` : `ปี ${year + 543}`;
@@ -71,6 +72,7 @@ export default function ProfitLossPage() {
       ["สินค้าคงเหลือปลายงวด", closingValue],
       ["ต้นทุนขาย", cogs],
       ["กำไรขั้นต้น", grossProfit],
+      ["% กำไรขั้นต้น", grossProfitMargin !== null ? `${grossProfitMargin.toFixed(1)}%` : "-"],
       [],
       ["รายละเอียดซื้อสินค้า/ค่าใช้จ่ายแยกตามหมวดบัญชี", ""],
       ...report.categoryBreakdown.map((c) => [c.accountName, c.amount]),
@@ -166,9 +168,12 @@ export default function ProfitLossPage() {
               <div className="text-[11px] text-orange-400 mt-1">สต๊อกต้นงวด + ซื้อ − สต๊อกปลายงวด</div>
             </div>
             <div className={`rounded-xl border p-4 text-center ${grossProfit >= 0 ? "bg-green-50 border-green-100" : "bg-red-50 border-red-100"}`}>
-              <div className={`text-xs mb-1 ${grossProfit >= 0 ? "text-green-600" : "text-red-600"}`}>กำไร(ขาดทุน)สุทธิ</div>
+              <div className={`text-xs mb-1 ${grossProfit >= 0 ? "text-green-600" : "text-red-600"}`}>กำไรขั้นต้น</div>
               <div className={`text-2xl font-bold ${grossProfit >= 0 ? "text-green-700" : "text-red-700"}`}>
                 {grossProfit < 0 && "-"}฿{formatCurrency(Math.abs(grossProfit))}
+              </div>
+              <div className={`text-[11px] mt-1 ${grossProfit >= 0 ? "text-green-400" : "text-red-400"}`}>
+                {grossProfitMargin !== null ? `${grossProfitMargin.toFixed(1)}% ของรายได้` : "-"}
               </div>
             </div>
           </div>
@@ -212,6 +217,17 @@ export default function ProfitLossPage() {
               <div className="flex justify-between font-semibold text-gray-900 border-t border-gray-100 pt-1.5">
                 <span>ต้นทุนขาย</span>
                 <span>฿{formatCurrency(cogs)}</span>
+              </div>
+              <div className="flex justify-between text-gray-600 pt-1.5">
+                <span>รายได้จากการขายและบริการ</span>
+                <span>฿{formatCurrency(report.revenue)}</span>
+              </div>
+              <div className={`flex justify-between font-semibold border-t border-gray-100 pt-1.5 ${grossProfit >= 0 ? "text-green-700" : "text-red-600"}`}>
+                <span>กำไรขั้นต้น (รายได้ − ต้นทุนขาย)</span>
+                <span>
+                  {grossProfit < 0 && "-"}฿{formatCurrency(Math.abs(grossProfit))}
+                  {grossProfitMargin !== null && ` (${grossProfitMargin.toFixed(1)}%)`}
+                </span>
               </div>
             </div>
             <div className="flex items-center gap-3 mt-4">
