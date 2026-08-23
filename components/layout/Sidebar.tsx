@@ -49,6 +49,7 @@ const menuGroups: MenuGroup[] = [
       { href: "/reports/overdue-ap", label: "เจ้าหนี้เกินกำหนด", icon: "⚠️" },
       { href: "/reports/bank-statement", label: "รายงานการเดินบัญชีธนาคาร", icon: "🏦" },
       { href: "/reports/monthly-purchase", label: "การซื้อประจำเดือน", icon: "🛒" },
+      { href: "/reports/profit-loss", label: "งบกำไรขาดทุน", icon: "📈" },
       { href: "/reports/monthly-wht", label: "ภาษีหัก ณ ที่จ่าย", icon: "🧾" },
     ],
   },

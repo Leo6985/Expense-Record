@@ -95,6 +95,117 @@ export async function getMonthlyWithholdingTaxReport(year: number, month: number
     .sort((a, b) => a.prep.payment.paymentDate.getTime() - b.prep.payment.paymentDate.getTime());
 }
 
+export type ProfitLossCategory = { accountId: string | null; accountName: string; amount: number };
+export type ProfitLossMonth = { month: number; revenue: number; expenses: number; net: number };
+export type ProfitLossReport = {
+  revenue: number;
+  expenses: number;
+  net: number;
+  categoryBreakdown: ProfitLossCategory[];
+  monthly?: ProfitLossMonth[];
+};
+
+function addToCategory(
+  map: Map<string, ProfitLossCategory>,
+  accountId: string | null,
+  accountName: string,
+  amount: number
+) {
+  const key = accountId ?? `name:${accountName}`;
+  const existing = map.get(key);
+  if (existing) existing.amount += amount;
+  else map.set(key, { accountId, accountName, amount });
+}
+
+const round2 = (n: number) => Math.round(n * 100) / 100;
+
+// รายได้ = SalesInvoice.amount (ก่อน VAT, ไม่รวมที่ยกเลิก) ตาม invoiceDate + ปรับปรุงจากใบเพิ่ม/ลดหนี้ที่
+// อนุมัติแล้วตาม noteDate ของตัวมันเอง (ไม่ย้อนกลับไปคาบเดิมของใบกำกับภาษี — สอดคล้องกับ
+// getEffectiveInvoiceTotal ใน lib/sales-invoice-reconciliation.ts ที่ถือว่าใบเพิ่ม/ลดหนี้เป็นเหตุการณ์ของ
+// มันเอง). ค่าใช้จ่าย = AccountsPayable.amount (ก่อน VAT, ไม่รวมที่ยกเลิก) ตาม invoiceDate — ฐานเดียวกับ
+// getMonthlyPurchaseReport ด้านล่าง เพื่อให้ยอดรวมตรงกันข้ามสองรายงาน. แยกหมวดหมู่ค่าใช้จ่ายผ่าน
+// AP -> GoodsReceipt -> GoodsReceiptItem -> POItem -> Product -> ChartOfAccount โดยกระจายยอด AP.amount
+// ตามสัดส่วนมูลค่าแต่ละบรรทัด (ไม่ใช่ totalPrice ดิบ) เพื่อให้ผลรวมของหมวดหมู่ตรงกับยอดรวมค่าใช้จ่ายเป๊ะ
+// แม้จะมีการปัดเศษหรือแก้ไข AP.amount ภายหลังสร้างจาก GR ก็ตาม. AP ที่ไม่ได้มาจาก GR (สร้างเอง ไม่มี
+// poId/grId) จะถูกจัดเข้าหมวด "ไม่ระบุหมวดบัญชี" ทั้งจำนวน.
+export async function getProfitLossReport(params: { year: number; month?: number }): Promise<ProfitLossReport> {
+  const { year, month } = params;
+  const from = month ? new Date(year, month - 1, 1) : new Date(year, 0, 1);
+  const to = month ? new Date(year, month, 1) : new Date(year + 1, 0, 1);
+
+  const [invoices, notes, aps] = await Promise.all([
+    prisma.salesInvoice.findMany({
+      where: { status: { not: "CANCELLED" }, invoiceDate: { gte: from, lt: to } },
+      select: { amount: true, invoiceDate: true },
+    }),
+    prisma.debitCreditNote.findMany({
+      where: { status: "APPROVED", noteDate: { gte: from, lt: to } },
+      select: { type: true, amount: true, noteDate: true },
+    }),
+    prisma.accountsPayable.findMany({
+      where: { status: { not: "CANCELLED" }, invoiceDate: { gte: from, lt: to } },
+      select: {
+        amount: true,
+        invoiceDate: true,
+        gr: {
+          select: {
+            items: {
+              select: {
+                totalPrice: true,
+                poItem: { select: { product: { select: { accountId: true, account: { select: { name: true } } } } } },
+              },
+            },
+          },
+        },
+      },
+    }),
+  ]);
+
+  const revenue = round2(
+    invoices.reduce((s, i) => s + i.amount, 0) +
+      notes.reduce((s, n) => s + (n.type === "DEBIT" ? n.amount : -n.amount), 0)
+  );
+
+  const categoryMap = new Map<string, ProfitLossCategory>();
+  let expenses = 0;
+  for (const ap of aps) {
+    expenses += ap.amount;
+    const items = ap.gr?.items ?? [];
+    const itemsSum = items.reduce((s, it) => s + it.totalPrice, 0);
+    if (items.length === 0 || itemsSum <= 0) {
+      addToCategory(categoryMap, null, "ไม่ระบุหมวดบัญชี", ap.amount);
+      continue;
+    }
+    for (const item of items) {
+      const accountId = item.poItem.product?.accountId ?? null;
+      const accountName = item.poItem.product?.account?.name ?? "ไม่ระบุหมวดบัญชี";
+      addToCategory(categoryMap, accountId, accountName, (item.totalPrice / itemsSum) * ap.amount);
+    }
+  }
+  expenses = round2(expenses);
+
+  const categoryBreakdown = Array.from(categoryMap.values())
+    .map((c) => ({ ...c, amount: round2(c.amount) }))
+    .sort((a, b) => b.amount - a.amount);
+
+  let monthly: ProfitLossMonth[] | undefined;
+  if (!month) {
+    const rev = Array(12).fill(0);
+    const exp = Array(12).fill(0);
+    for (const inv of invoices) rev[inv.invoiceDate.getMonth()] += inv.amount;
+    for (const n of notes) rev[n.noteDate.getMonth()] += n.type === "DEBIT" ? n.amount : -n.amount;
+    for (const ap of aps) exp[ap.invoiceDate.getMonth()] += ap.amount;
+    monthly = Array.from({ length: 12 }, (_, i) => ({
+      month: i + 1,
+      revenue: round2(rev[i]),
+      expenses: round2(exp[i]),
+      net: round2(rev[i] - exp[i]),
+    }));
+  }
+
+  return { revenue, expenses, net: round2(revenue - expenses), categoryBreakdown, monthly };
+}
+
 export async function getCompanyBankAccounts() {
   return prisma.companyBankAccount.findMany({
     where: { isActive: true },
