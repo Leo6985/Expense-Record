@@ -95,7 +95,7 @@ export async function getReceipt(id: string) {
 // Numbered by the receipt's payment month (receiptDate), not the date it's recorded in the
 // system, so a receipt entered late still slots into the sequence for the month it was paid.
 export async function getNextReceiptNumber(receiptDate: Date) {
-  const year = String(receiptDate.getUTCFullYear() + 543).slice(-2);
+  const year = String(receiptDate.getUTCFullYear());
   const month = String(receiptDate.getUTCMonth() + 1).padStart(2, "0");
   const prefix = `RC${year}${month}`;
   const last = await prisma.receipt.findFirst({
