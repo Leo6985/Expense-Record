@@ -97,7 +97,7 @@ export async function getMonthlyWithholdingTaxReport(year: number, month: number
     .sort((a, b) => a.prep.payment.paymentDate.getTime() - b.prep.payment.paymentDate.getTime());
 }
 
-export type ProfitLossCategory = { accountId: string | null; accountName: string; amount: number };
+export type ProfitLossCategory = { accountId: string | null; accountCode: string | null; accountName: string; amount: number };
 export type ProfitLossMonth = { month: number; revenue: number; expenses: number; net: number };
 export type ProfitLossReport = {
   revenue: number;
@@ -110,13 +110,14 @@ export type ProfitLossReport = {
 function addToCategory(
   map: Map<string, ProfitLossCategory>,
   accountId: string | null,
+  accountCode: string | null,
   accountName: string,
   amount: number
 ) {
   const key = accountId ?? `name:${accountName}`;
   const existing = map.get(key);
   if (existing) existing.amount += amount;
-  else map.set(key, { accountId, accountName, amount });
+  else map.set(key, { accountId, accountCode, accountName, amount });
 }
 
 const round2 = (n: number) => Math.round(n * 100) / 100;
@@ -150,13 +151,13 @@ export async function getProfitLossReport(params: { year: number; month?: number
       select: {
         amount: true,
         invoiceDate: true,
-        account: { select: { id: true, name: true } },
+        account: { select: { id: true, code: true, name: true } },
         gr: {
           select: {
             items: {
               select: {
                 totalPrice: true,
-                poItem: { select: { product: { select: { accountId: true, account: { select: { name: true } } } } } },
+                poItem: { select: { product: { select: { accountId: true, account: { select: { code: true, name: true } } } } } },
               },
             },
           },
@@ -177,13 +178,14 @@ export async function getProfitLossReport(params: { year: number; month?: number
     const items = ap.gr?.items ?? [];
     const itemsSum = items.reduce((s, it) => s + it.totalPrice, 0);
     if (items.length === 0 || itemsSum <= 0) {
-      addToCategory(categoryMap, ap.account?.id ?? null, ap.account?.name ?? "ไม่ระบุหมวดบัญชี", ap.amount);
+      addToCategory(categoryMap, ap.account?.id ?? null, ap.account?.code ?? null, ap.account?.name ?? "ไม่ระบุหมวดบัญชี", ap.amount);
       continue;
     }
     for (const item of items) {
       const accountId = item.poItem.product?.accountId ?? null;
+      const accountCode = item.poItem.product?.account?.code ?? null;
       const accountName = item.poItem.product?.account?.name ?? "ไม่ระบุหมวดบัญชี";
-      addToCategory(categoryMap, accountId, accountName, (item.totalPrice / itemsSum) * ap.amount);
+      addToCategory(categoryMap, accountId, accountCode, accountName, (item.totalPrice / itemsSum) * ap.amount);
     }
   }
   expenses = round2(expenses);

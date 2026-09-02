@@ -75,7 +75,7 @@ export default function ProfitLossPage() {
       ["% กำไรขั้นต้น", grossProfitMargin !== null ? `${grossProfitMargin.toFixed(1)}%` : "-"],
       [],
       ["รายละเอียดซื้อสินค้า/ค่าใช้จ่ายแยกตามหมวดบัญชี", ""],
-      ...report.categoryBreakdown.map((c) => [c.accountName, c.amount]),
+      ...report.categoryBreakdown.map((c) => [c.accountCode ? `${c.accountCode} — ${c.accountName}` : c.accountName, c.amount]),
     ];
     downloadCSV(`งบกำไรขาดทุน_${periodType === "month" ? `${year}_${String(month).padStart(2, "0")}` : year}.csv`, headers, rows);
   }
@@ -292,6 +292,7 @@ export default function ProfitLossPage() {
               <table className="w-full text-sm">
                 <thead>
                   <tr className="bg-gray-50 border-b border-gray-200">
+                    <th className="text-left py-2.5 px-4 font-medium text-gray-600">รหัสผังบัญชี</th>
                     <th className="text-left py-2.5 px-4 font-medium text-gray-600">หมวดบัญชี</th>
                     <th className="text-right py-2.5 px-4 font-medium text-gray-600">จำนวนเงิน</th>
                     <th className="text-right py-2.5 px-4 font-medium text-gray-600">% ของยอดซื้อ</th>
@@ -300,6 +301,7 @@ export default function ProfitLossPage() {
                 <tbody>
                   {report.categoryBreakdown.map((c) => (
                     <tr key={c.accountId ?? c.accountName} className="border-b border-gray-100">
+                      <td className="py-2 px-4 font-mono text-gray-500">{c.accountCode ?? "-"}</td>
                       <td className="py-2 px-4 text-gray-800">{c.accountName}</td>
                       <td className="py-2 px-4 text-right text-gray-700">฿{formatCurrency(c.amount)}</td>
                       <td className="py-2 px-4 text-right text-gray-500">
@@ -310,7 +312,7 @@ export default function ProfitLossPage() {
                 </tbody>
                 <tfoot>
                   <tr className="bg-gray-50 font-semibold border-t border-gray-200">
-                    <td className="py-2.5 px-4 text-gray-700">รวม</td>
+                    <td className="py-2.5 px-4 text-gray-700" colSpan={2}>รวม</td>
                     <td className="py-2.5 px-4 text-right text-orange-700">฿{formatCurrency(report.expenses)}</td>
                     <td className="py-2.5 px-4 text-right text-gray-500">100.0%</td>
                   </tr>
