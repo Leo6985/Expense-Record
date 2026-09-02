@@ -36,6 +36,7 @@ export async function syncAPToSheet(ap: {
   totalAmount: number;
   status: string;
   accountId: string | null;
+  poNumberRef: string | null;
   notes: string | null;
   createdByName: string | null;
   createdById: string | null;
@@ -163,6 +164,8 @@ export async function createAccountsPayable(data: {
   poId?: string;
   grId?: string;
   accountId?: string;
+  // เลขที่ PO อ้างอิงแบบพิมพ์เอง (ไม่ใช่ FK) — ใช้เมื่อยังไม่มีการออก PO จริงในระบบ (poId ด้านบน)
+  poNumberRef?: string;
   invoiceNumber: string;
   invoiceDate: string;
   dueDate: string;
@@ -185,6 +188,7 @@ export async function createAccountsPayable(data: {
       poId: data.poId || null,
       grId: data.grId || null,
       accountId: data.accountId || null,
+      poNumberRef: data.poNumberRef || null,
       invoiceNumber: data.invoiceNumber,
       invoiceDate: new Date(data.invoiceDate),
       dueDate: new Date(data.dueDate),
@@ -316,9 +320,10 @@ type ImportRow = {
  * and the created AP flows into the existing PaymentPrep → Payment reconciliation exactly
  * like any other AP. Each row is tagged with accountId (defaulting to "สินค้าสำเร็จรูปคงเหลือ",
  * DEFAULT_RESALE_GOODS_ACCOUNT_CODE) so getProfitLossReport can categorize it correctly even
- * though it has no PO/GR/Product chain to derive a category from. poNumber is an optional
- * reference to an existing PurchaseOrder (looked up by poNumber, not required to exist) — set
- * for traceability only, it does not create a GoodsReceipt or otherwise affect the PO's status.
+ * though it has no PO/GR/Product chain to derive a category from. poNumber is stored as-is into
+ * AccountsPayable.poNumberRef — a free-text reference, not a lookup against PurchaseOrder — so
+ * these purchases don't require a PO to already exist in the system (per user decision: this
+ * whole import path is explicitly for goods/services bought without going through the PO flow).
  */
 export async function importAccountsPayableCSV(rows: ImportRow[]) {
   let created = 0;
@@ -365,15 +370,7 @@ export async function importAccountsPayableCSV(rows: ImportRow[]) {
       accountId = account.id;
     }
 
-    let poId: string | null = null;
-    if (row.poNumber) {
-      const po = await prisma.purchaseOrder.findUnique({ where: { poNumber: row.poNumber } });
-      if (!po) {
-        errors.push(`เลขที่ใบแจ้งหนี้ ${row.invoiceNumber}: ไม่พบเลขที่ใบสั่งซื้อ "${row.poNumber}"`);
-        continue;
-      }
-      poId = po.id;
-    }
+    const poNumberRef = row.poNumber || null;
 
     try {
       const { vendor, created: vendorCreated } = await findOrCreateVendorByName(row.vendorName);
@@ -396,7 +393,7 @@ export async function importAccountsPayableCSV(rows: ImportRow[]) {
           errors.push(`เลขที่ใบแจ้งหนี้ ${row.invoiceNumber}: ถูกดึงไปใช้ในใบเตรียมจ่ายแล้ว ข้ามการอัปเดต`);
           continue;
         }
-        const data = { vendorId: vendor.id, poId, invoiceDate, dueDate, amount, vatAmount, totalAmount, accountId };
+        const data = { vendorId: vendor.id, poNumberRef, invoiceDate, dueDate, amount, vatAmount, totalAmount, accountId };
         await prisma.accountsPayable.update({ where: { id: existing.id }, data });
         updated++;
         toUpdateInSheet.push({ id: existing.id, data });
@@ -406,7 +403,7 @@ export async function importAccountsPayableCSV(rows: ImportRow[]) {
           data: {
             apNumber,
             vendorId: vendor.id,
-            poId,
+            poNumberRef,
             accountId,
             invoiceNumber: row.invoiceNumber,
             invoiceDate,

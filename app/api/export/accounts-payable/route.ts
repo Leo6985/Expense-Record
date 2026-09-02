@@ -11,6 +11,7 @@ export async function GET() {
     "เลขที่ AP": ap.apNumber,
     "ผู้ขาย": ap.vendor.name,
     "เลขที่ PO": ap.po?.poNumber ?? "",
+    "เลขที่ใบสั่งซื้อ (พิมพ์เอง)": ap.poNumberRef ?? "",
     "เลขที่ GR": ap.gr?.grNumber ?? "",
     "เลขที่ใบแจ้งหนี้": ap.invoiceNumber,
     "หมวดบัญชี": ap.account ? `${ap.account.code} — ${ap.account.name}` : "",

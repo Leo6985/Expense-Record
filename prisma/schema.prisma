@@ -272,6 +272,9 @@ model AccountsPayable {
   // ใช้แยกหมวดในงบกำไรขาดทุนแทนที่จะตกเป็น "ไม่ระบุหมวดบัญชี" ทั้งหมด ดู getProfitLossReport
   accountId      String?
   account        ChartOfAccount? @relation(fields: [accountId], references: [id])
+  // เลขที่ใบสั่งซื้ออ้างอิงแบบพิมพ์เอง (ข้อความอิสระ ไม่ใช่ FK) — สำหรับ "สินค้า/บริการที่ซื้อมาเพื่อขาย"
+  // ที่บันทึกตรงโดยไม่ต้องออก PO ในระบบก่อน (ต่างจาก poId ด้านบนซึ่งอ้างอิง PurchaseOrder จริงในระบบ)
+  poNumberRef    String?
   notes          String?
   createdByName  String?
   createdById    String?

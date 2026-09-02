@@ -162,6 +162,7 @@ export default function APDetailPage() {
               </Link>
             </div>
           )}
+          {ap.poNumberRef && <InfoRow label="เลขที่ใบสั่งซื้อ (พิมพ์เอง)" value={ap.poNumberRef} />}
           {ap.notes && <InfoRow label="หมายเหตุ" value={ap.notes} />}
         </div>
       </div>

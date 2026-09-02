@@ -109,6 +109,11 @@ export default function NewAPPage() {
         <span className="font-medium text-gray-900">{userName || "กำลังโหลด..."}</span>
       </div>
 
+      <div className="bg-gray-50 border border-gray-200 text-gray-600 rounded-lg px-4 py-2.5 text-sm mb-5">
+        ซื้อสินค้า/บริการเพื่อขาย และยังไม่ได้ออกใบสั่งซื้อในระบบ?{" "}
+        <Link href="/accounts-payable/new-resale" className="underline font-medium text-blue-700">ตั้งหนี้โดยไม่ต้องมี PO →</Link>
+      </div>
+
       <form onSubmit={handleSubmit} className="space-y-5">
         {/* Step 1: Select PO */}
         <div className="bg-white rounded-xl border border-gray-200 p-5">

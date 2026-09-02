@@ -29,6 +29,12 @@ export default async function AccountsPayablePage({
           </a>
           <AccountsPayableCsvImport />
           <Link
+            href="/accounts-payable/new-resale"
+            className="border border-blue-700 text-blue-700 px-4 py-2 rounded-lg text-sm font-medium hover:bg-blue-50 transition-colors"
+          >
+            + สินค้า/บริการซื้อมาเพื่อขาย
+          </Link>
+          <Link
             href="/accounts-payable/new"
             className="bg-blue-700 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-blue-800 transition-colors"
           >
