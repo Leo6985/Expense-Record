@@ -5,8 +5,15 @@ import { Prisma } from "@prisma/client";
 import { revalidatePath } from "next/cache";
 import { auth } from "@/auth";
 import { accountsPayableTable, AccountsPayableRecord } from "@/lib/sheets-tables";
+import { findOrCreateVendorByName } from "./vendors";
+import { parseImportDate } from "@/lib/import-dates";
+import { computeDueDate } from "@/lib/invoice-due-dates";
 
 const AMOUNT_TOLERANCE = 0.01;
+
+// รหัสผังบัญชีเริ่มต้นสำหรับ AP ที่นำเข้าจากไฟล์ "สินค้า/บริการที่ซื้อมาเพื่อขาย" เมื่อไฟล์ไม่ได้ระบุ
+// หมวดบัญชีมาเอง — ผูกกับ "สินค้าสำเร็จรูปคงเหลือ" ตามที่ตกลงกับผู้ใช้ระบบนี้
+const DEFAULT_RESALE_GOODS_ACCOUNT_CODE = "1140-20";
 
 /**
  * Postgres remains authoritative (POItem/GoodsReceiptItem/PaymentPrepItem-adjacent tables
@@ -28,6 +35,7 @@ export async function syncAPToSheet(ap: {
   vatAmount: number;
   totalAmount: number;
   status: string;
+  accountId: string | null;
   notes: string | null;
   createdByName: string | null;
   createdById: string | null;
@@ -104,6 +112,7 @@ export async function getAccountsPayable(search?: string, status?: string) {
       vendor: { select: { name: true } },
       po: { select: { poNumber: true } },
       gr: { select: { grNumber: true } },
+      account: { select: { code: true, name: true } },
     },
     orderBy: { createdAt: "desc" },
   });
@@ -129,6 +138,7 @@ export async function getAccountsPayableById(id: string) {
       vendor: true,
       po: { include: { items: true } },
       gr: true,
+      account: true,
     },
   });
 }
@@ -152,6 +162,7 @@ export async function createAccountsPayable(data: {
   vendorId: string;
   poId?: string;
   grId?: string;
+  accountId?: string;
   invoiceNumber: string;
   invoiceDate: string;
   dueDate: string;
@@ -173,6 +184,7 @@ export async function createAccountsPayable(data: {
       vendorId: data.vendorId,
       poId: data.poId || null,
       grId: data.grId || null,
+      accountId: data.accountId || null,
       invoiceNumber: data.invoiceNumber,
       invoiceDate: new Date(data.invoiceDate),
       dueDate: new Date(data.dueDate),
@@ -283,4 +295,133 @@ export async function getReceivedPOsWithoutAP() {
     },
     orderBy: { updatedAt: "desc" },
   });
+}
+
+type ImportRow = {
+  invoiceNumber: string;
+  invoiceDate: string;
+  vendorName: string;
+  amount?: number;
+  vatAmount?: number;
+  totalAmount?: number;
+  accountCode?: string;
+  notes?: string;
+};
+
+/**
+ * Bulk-imports "สินค้าและบริการที่ซื้อมาเพื่อขาย" (goods/services purchased for resale) as
+ * AccountsPayable rows — mirrors importSalesInvoicesCSV on the AR side: no PO/GR required
+ * (poId/grId are already optional on this model), vendor auto-created by name if not found,
+ * and the created AP flows into the existing PaymentPrep → Payment reconciliation exactly
+ * like any other AP. Each row is tagged with accountId (defaulting to "สินค้าสำเร็จรูปคงเหลือ",
+ * DEFAULT_RESALE_GOODS_ACCOUNT_CODE) so getProfitLossReport can categorize it correctly even
+ * though it has no PO/GR/Product chain to derive a category from.
+ */
+export async function importAccountsPayableCSV(rows: ImportRow[]) {
+  let created = 0;
+  let updated = 0;
+  let vendorsCreated = 0;
+  let skipped = 0;
+  const errors: string[] = [];
+  const toCreateInSheet: AccountsPayableRecord[] = [];
+  const toUpdateInSheet: { id: string; data: Partial<AccountsPayableRecord> }[] = [];
+
+  const defaultAccount = await prisma.chartOfAccount.findUnique({
+    where: { code: DEFAULT_RESALE_GOODS_ACCOUNT_CODE },
+  });
+
+  const session = await auth();
+  const createdByName = (session?.user as { name?: string })?.name ?? "";
+  const createdById = (session?.user as { id?: string })?.id ?? "";
+
+  for (const row of rows) {
+    if (!row.invoiceNumber || !row.invoiceDate || !row.vendorName) {
+      errors.push(`แถว "${row.invoiceNumber || "?"}" : ต้องมีเลขที่ใบแจ้งหนี้ วันที่ และชื่อผู้ขาย`);
+      continue;
+    }
+    const invoiceDate = parseImportDate(row.invoiceDate);
+    if (!invoiceDate) {
+      errors.push(`เลขที่ใบแจ้งหนี้ ${row.invoiceNumber}: วันที่ไม่ถูกต้อง ("${row.invoiceDate}")`);
+      continue;
+    }
+    const vatAmount = row.vatAmount ?? 0;
+    const amount = row.amount ?? (row.totalAmount !== undefined ? row.totalAmount - vatAmount : undefined);
+    const totalAmount = row.totalAmount ?? (amount !== undefined ? amount + vatAmount : undefined);
+    if (amount === undefined || totalAmount === undefined) {
+      errors.push(`เลขที่ใบแจ้งหนี้ ${row.invoiceNumber}: ต้องมียอดก่อนภาษีหรือยอดรวมอย่างน้อยหนึ่งค่า`);
+      continue;
+    }
+
+    let accountId: string | null = defaultAccount?.id ?? null;
+    if (row.accountCode) {
+      const account = await prisma.chartOfAccount.findUnique({ where: { code: row.accountCode } });
+      if (!account) {
+        errors.push(`เลขที่ใบแจ้งหนี้ ${row.invoiceNumber}: ไม่พบรหัสผังบัญชี "${row.accountCode}"`);
+        continue;
+      }
+      accountId = account.id;
+    }
+
+    try {
+      const { vendor, created: vendorCreated } = await findOrCreateVendorByName(row.vendorName);
+      if (vendorCreated) vendorsCreated++;
+
+      // invoiceNumber is unique per vendor here, not globally (unlike SalesInvoice.invoiceNumber)
+      // — different vendors can legitimately reuse the same invoice numbering, so "already
+      // imported" must be scoped to this vendor, not looked up as a global unique key.
+      const existing = await prisma.accountsPayable.findFirst({
+        where: { vendorId: vendor.id, invoiceNumber: row.invoiceNumber, status: { not: "CANCELLED" } },
+        include: { paymentPrepItems: { include: { prep: true } } },
+      });
+
+      const dueDate = computeDueDate(invoiceDate, vendor.creditDays);
+
+      if (existing) {
+        const hasActivePrep = existing.paymentPrepItems.some((item) => item.prep.status !== "CANCELLED");
+        if (hasActivePrep) {
+          skipped++;
+          errors.push(`เลขที่ใบแจ้งหนี้ ${row.invoiceNumber}: ถูกดึงไปใช้ในใบเตรียมจ่ายแล้ว ข้ามการอัปเดต`);
+          continue;
+        }
+        const data = { vendorId: vendor.id, invoiceDate, dueDate, amount, vatAmount, totalAmount, accountId };
+        await prisma.accountsPayable.update({ where: { id: existing.id }, data });
+        updated++;
+        toUpdateInSheet.push({ id: existing.id, data });
+      } else {
+        const apNumber = await getNextAPNumber();
+        const ap = await prisma.accountsPayable.create({
+          data: {
+            apNumber,
+            vendorId: vendor.id,
+            accountId,
+            invoiceNumber: row.invoiceNumber,
+            invoiceDate,
+            dueDate,
+            amount,
+            vatAmount,
+            totalAmount,
+            notes: row.notes || null,
+            createdByName,
+            createdById,
+          },
+        });
+        created++;
+        toCreateInSheet.push(ap);
+      }
+    } catch {
+      errors.push(`เลขที่ใบแจ้งหนี้ ${row.invoiceNumber}: บันทึกไม่สำเร็จ`);
+    }
+  }
+
+  try {
+    if (toCreateInSheet.length > 0) await accountsPayableTable.createMany(toCreateInSheet);
+    if (toUpdateInSheet.length > 0) await accountsPayableTable.updateMany(toUpdateInSheet);
+  } catch (err) {
+    errors.push(
+      `ข้อมูลถูกบันทึกในระบบหลักแล้ว แต่ซิงค์เข้า Google Sheet ไม่สำเร็จ: ${err instanceof Error ? err.message : String(err)}`
+    );
+  }
+
+  revalidatePath("/accounts-payable");
+  return { created, updated, vendorsCreated, skipped, errors };
 }

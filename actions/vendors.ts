@@ -287,3 +287,26 @@ export async function getNextVendorCode() {
   const num = parseInt(lastVendor.code.replace("V", "")) + 1;
   return `V${String(num).padStart(5, "0")}`;
 }
+
+/**
+ * Finds an existing vendor by exact case-insensitive name match, or creates one with an
+ * auto-generated code. Used by the accounts-payable CSV import, which only carries a vendor
+ * name (not a code), so uploads don't need the vendor registered ahead of time — mirrors
+ * findOrCreateCustomerByName in actions/customers.ts.
+ */
+export async function findOrCreateVendorByName(name: string) {
+  const trimmed = name.trim();
+  const existing = await prisma.vendor.findFirst({
+    where: { name: { equals: trimmed, mode: "insensitive" } },
+  });
+  if (existing) return { vendor: existing, created: false };
+
+  const code = await getNextVendorCode();
+  const vendor = await prisma.vendor.create({ data: { code, name: trimmed } });
+  try {
+    await syncVendorToSheet(vendor);
+  } catch (err) {
+    console.error("syncVendorToSheet failed after findOrCreateVendorByName:", err);
+  }
+  return { vendor, created: true };
+}

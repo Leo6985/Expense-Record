@@ -128,8 +128,9 @@ const round2 = (n: number) => Math.round(n * 100) / 100;
 // getMonthlyPurchaseReport ด้านล่าง เพื่อให้ยอดรวมตรงกันข้ามสองรายงาน. แยกหมวดหมู่ค่าใช้จ่ายผ่าน
 // AP -> GoodsReceipt -> GoodsReceiptItem -> POItem -> Product -> ChartOfAccount โดยกระจายยอด AP.amount
 // ตามสัดส่วนมูลค่าแต่ละบรรทัด (ไม่ใช่ totalPrice ดิบ) เพื่อให้ผลรวมของหมวดหมู่ตรงกับยอดรวมค่าใช้จ่ายเป๊ะ
-// แม้จะมีการปัดเศษหรือแก้ไข AP.amount ภายหลังสร้างจาก GR ก็ตาม. AP ที่ไม่ได้มาจาก GR (สร้างเอง ไม่มี
-// poId/grId) จะถูกจัดเข้าหมวด "ไม่ระบุหมวดบัญชี" ทั้งจำนวน.
+// แม้จะมีการปัดเศษหรือแก้ไข AP.amount ภายหลังสร้างจาก GR ก็ตาม. AP ที่ไม่มีสาย GR (เช่น นำเข้า CSV
+// "สินค้า/บริการที่ซื้อมาเพื่อขาย" หรือตั้งหนี้ตรงจากฟอร์ม) จะใช้ AP.accountId ที่ตั้งไว้เองแทน (ถ้ามี) —
+// เหลือ "ไม่ระบุหมวดบัญชี" เฉพาะกรณีไม่มีทั้งสาย GR และ accountId เท่านั้น.
 export async function getProfitLossReport(params: { year: number; month?: number }): Promise<ProfitLossReport> {
   const { year, month } = params;
   const from = month ? new Date(year, month - 1, 1) : new Date(year, 0, 1);
@@ -149,6 +150,7 @@ export async function getProfitLossReport(params: { year: number; month?: number
       select: {
         amount: true,
         invoiceDate: true,
+        account: { select: { id: true, name: true } },
         gr: {
           select: {
             items: {
@@ -175,7 +177,7 @@ export async function getProfitLossReport(params: { year: number; month?: number
     const items = ap.gr?.items ?? [];
     const itemsSum = items.reduce((s, it) => s + it.totalPrice, 0);
     if (items.length === 0 || itemsSum <= 0) {
-      addToCategory(categoryMap, null, "ไม่ระบุหมวดบัญชี", ap.amount);
+      addToCategory(categoryMap, ap.account?.id ?? null, ap.account?.name ?? "ไม่ระบุหมวดบัญชี", ap.amount);
       continue;
     }
     for (const item of items) {

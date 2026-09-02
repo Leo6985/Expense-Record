@@ -4,8 +4,11 @@ import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
 import { createAccountsPayable, getReceivedPOsWithoutAP } from "@/actions/accounts-payable";
+import { getChartOfAccounts } from "@/actions/chart-of-accounts";
 import { formatDate, formatCurrency } from "@/lib/utils";
 import Link from "next/link";
+
+type Account = Awaited<ReturnType<typeof getChartOfAccounts>>[number];
 
 type POItem = { id: string; description: string; quantity: number; unit: string | null; unitPrice: number; totalPrice: number };
 type PO = {
@@ -35,12 +38,15 @@ export default function NewAPPage() {
   const [dueDate, setDueDate] = useState("");
   const [amount, setAmount] = useState("0");
   const [vatRate, setVatRate] = useState("7");
+  const [accountId, setAccountId] = useState("");
+  const [accounts, setAccounts] = useState<Account[]>([]);
   const [notes, setNotes] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
   useEffect(() => {
     getReceivedPOsWithoutAP().then((pos) => setAvailablePOs(pos as PO[]));
+    getChartOfAccounts().then((data) => setAccounts(data.filter((a) => a.isActive)));
   }, []);
 
   function handleSelectPO(poId: string) {
@@ -75,6 +81,7 @@ export default function NewAPPage() {
       await createAccountsPayable({
         vendorId: selectedPO.vendor.id,
         poId: selectedPO.id,
+        accountId: accountId || undefined,
         invoiceNumber,
         invoiceDate,
         dueDate,
@@ -235,6 +242,24 @@ export default function NewAPPage() {
                     onChange={(e) => setNotes(e.target.value)}
                     className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                   />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    หมวดบัญชี
+                    <span className="text-gray-400 font-normal ml-1">(ถ้าไม่ระบุ จะแยกตามผังบัญชีของสินค้าใน PO)</span>
+                  </label>
+                  <select
+                    value={accountId}
+                    onChange={(e) => setAccountId(e.target.value)}
+                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  >
+                    <option value="">-- ไม่ระบุ --</option>
+                    {accounts.map((a) => (
+                      <option key={a.id} value={a.id}>
+                        {a.code} — {a.name}
+                      </option>
+                    ))}
+                  </select>
                 </div>
               </div>
             </div>

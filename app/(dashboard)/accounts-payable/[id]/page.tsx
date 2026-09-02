@@ -145,6 +145,7 @@ export default function APDetailPage() {
           <InfoRow label="วันครบกำหนด" value={formatDate(ap.dueDate)} highlight={isOverdue} />
           <InfoRow label="ผู้จัดทำ" value={ap.createdByName ?? "-"} />
           <InfoRow label="ผู้อนุมัติ" value={ap.approvedByName ?? "-"} />
+          {ap.account && <InfoRow label="หมวดบัญชี" value={`${ap.account.code} — ${ap.account.name}`} />}
           {ap.po && (
             <div>
               <div className="text-xs text-gray-500 mb-0.5">อ้างอิง PO</div>

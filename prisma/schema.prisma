@@ -52,7 +52,8 @@ model ChartOfAccount {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  products Product[]
+  products        Product[]
+  accountsPayable AccountsPayable[]
 }
 
 model Product {
@@ -252,28 +253,32 @@ model GoodsReceiptItem {
 }
 
 model AccountsPayable {
-  id             String         @id @default(cuid())
-  apNumber       String         @unique
+  id             String          @id @default(cuid())
+  apNumber       String          @unique
   vendorId       String
-  vendor         Vendor         @relation(fields: [vendorId], references: [id])
+  vendor         Vendor          @relation(fields: [vendorId], references: [id])
   poId           String?
-  po             PurchaseOrder? @relation(fields: [poId], references: [id])
+  po             PurchaseOrder?  @relation(fields: [poId], references: [id])
   grId           String?
-  gr             GoodsReceipt?  @relation(fields: [grId], references: [id])
+  gr             GoodsReceipt?   @relation(fields: [grId], references: [id])
   invoiceNumber  String
   invoiceDate    DateTime
   dueDate        DateTime
   amount         Float
-  vatAmount      Float          @default(0)
+  vatAmount      Float           @default(0)
   totalAmount    Float
-  status         String         @default("PENDING")
+  status         String          @default("PENDING")
+  // หมวดบัญชี (ผังบัญชี) สำหรับ AP ที่ไม่ได้มาจากสาย PO/GR/Product (เช่น นำเข้า CSV หรือกรอกตั้งหนี้ตรง) —
+  // ใช้แยกหมวดในงบกำไรขาดทุนแทนที่จะตกเป็น "ไม่ระบุหมวดบัญชี" ทั้งหมด ดู getProfitLossReport
+  accountId      String?
+  account        ChartOfAccount? @relation(fields: [accountId], references: [id])
   notes          String?
   createdByName  String?
   createdById    String?
   approvedByName String?
   approvedById   String?
-  createdAt      DateTime       @default(now())
-  updatedAt      DateTime       @updatedAt
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
 
   paymentPrepItems PaymentPrepItem[]
 }

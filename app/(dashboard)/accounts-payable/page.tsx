@@ -1,6 +1,7 @@
 import { getAccountsPayable } from "@/actions/accounts-payable";
 import Link from "next/link";
 import { formatDate, formatCurrency } from "@/lib/utils";
+import AccountsPayableCsvImport from "./AccountsPayableCsvImport";
 
 const statusConfig: Record<string, { label: string; color: string }> = {
   PENDING: { label: "รอดำเนินการ", color: "bg-yellow-100 text-yellow-700" },
@@ -26,6 +27,7 @@ export default async function AccountsPayablePage({
           <a href="/api/export/accounts-payable" className="text-sm text-green-700 hover:underline flex items-center gap-1 font-medium">
             ⬇ ดาวน์โหลด (.xlsx)
           </a>
+          <AccountsPayableCsvImport />
           <Link
             href="/accounts-payable/new"
             className="bg-blue-700 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-blue-800 transition-colors"
@@ -68,6 +70,7 @@ export default async function AccountsPayablePage({
                 <th className="text-left px-4 py-3 font-medium text-gray-600">วันที่ใบแจ้งหนี้</th>
                 <th className="text-left px-4 py-3 font-medium text-gray-600">เลขที่ใบแจ้งหนี้</th>
                 <th className="text-left px-4 py-3 font-medium text-gray-600">ผู้ขาย</th>
+                <th className="text-left px-4 py-3 font-medium text-gray-600">หมวดบัญชี</th>
                 <th className="text-left px-4 py-3 font-medium text-gray-600">วันครบกำหนด</th>
                 <th className="text-right px-4 py-3 font-medium text-gray-600">จำนวนเงิน</th>
                 <th className="text-left px-4 py-3 font-medium text-gray-600">สถานะ</th>
@@ -76,7 +79,7 @@ export default async function AccountsPayablePage({
             <tbody>
               {aps.length === 0 ? (
                 <tr>
-                  <td colSpan={7} className="px-4 py-8 text-center text-gray-400">ไม่พบข้อมูล</td>
+                  <td colSpan={8} className="px-4 py-8 text-center text-gray-400">ไม่พบข้อมูล</td>
                 </tr>
               ) : (
                 aps.map((ap) => {
@@ -92,6 +95,7 @@ export default async function AccountsPayablePage({
                       <td className="px-4 py-3 text-gray-600">{formatDate(ap.invoiceDate)}</td>
                       <td className="px-4 py-3 text-gray-600">{ap.invoiceNumber}</td>
                       <td className="px-4 py-3 font-medium">{ap.vendor.name}</td>
+                      <td className="px-4 py-3 text-gray-600">{ap.account?.name ?? "-"}</td>
                       <td className={`px-4 py-3 ${isOverdue ? "text-red-600 font-medium" : "text-gray-600"}`}>
                         {formatDate(ap.dueDate)}
                         {isOverdue && " ⚠️"}

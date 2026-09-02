@@ -13,6 +13,7 @@ export async function GET() {
     "เลขที่ PO": ap.po?.poNumber ?? "",
     "เลขที่ GR": ap.gr?.grNumber ?? "",
     "เลขที่ใบแจ้งหนี้": ap.invoiceNumber,
+    "หมวดบัญชี": ap.account ? `${ap.account.code} — ${ap.account.name}` : "",
     "วันครบกำหนด": ap.dueDate.toISOString().slice(0, 10),
     "มูลค่ารวม": ap.totalAmount,
     "สถานะ": ap.status,

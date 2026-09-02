@@ -297,6 +297,7 @@ export type AccountsPayableRecord = {
   vatAmount: number;
   totalAmount: number;
   status: string;
+  accountId: string | null;
   notes: string | null;
   createdByName: string | null;
   createdById: string | null;
@@ -328,6 +329,9 @@ export const ACCOUNTS_PAYABLE_COLUMNS: ColumnDef[] = [
   { key: "approvedById", type: "string" },
   { key: "createdAt", type: "date" },
   { key: "updatedAt", type: "date" },
+  // Appended at the end (not inserted among the original columns) so existing rows' values
+  // stay aligned with their original column positions — see accountId on AccountsPayable.
+  { key: "accountId", type: "string" },
 ];
 
 export const accountsPayableTable = new SheetTable<AccountsPayableRecord>(
