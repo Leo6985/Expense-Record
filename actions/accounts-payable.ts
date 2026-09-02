@@ -305,6 +305,7 @@ type ImportRow = {
   vatAmount?: number;
   totalAmount?: number;
   accountCode?: string;
+  poNumber?: string;
   notes?: string;
 };
 
@@ -315,7 +316,9 @@ type ImportRow = {
  * and the created AP flows into the existing PaymentPrep → Payment reconciliation exactly
  * like any other AP. Each row is tagged with accountId (defaulting to "สินค้าสำเร็จรูปคงเหลือ",
  * DEFAULT_RESALE_GOODS_ACCOUNT_CODE) so getProfitLossReport can categorize it correctly even
- * though it has no PO/GR/Product chain to derive a category from.
+ * though it has no PO/GR/Product chain to derive a category from. poNumber is an optional
+ * reference to an existing PurchaseOrder (looked up by poNumber, not required to exist) — set
+ * for traceability only, it does not create a GoodsReceipt or otherwise affect the PO's status.
  */
 export async function importAccountsPayableCSV(rows: ImportRow[]) {
   let created = 0;
@@ -362,6 +365,16 @@ export async function importAccountsPayableCSV(rows: ImportRow[]) {
       accountId = account.id;
     }
 
+    let poId: string | null = null;
+    if (row.poNumber) {
+      const po = await prisma.purchaseOrder.findUnique({ where: { poNumber: row.poNumber } });
+      if (!po) {
+        errors.push(`เลขที่ใบแจ้งหนี้ ${row.invoiceNumber}: ไม่พบเลขที่ใบสั่งซื้อ "${row.poNumber}"`);
+        continue;
+      }
+      poId = po.id;
+    }
+
     try {
       const { vendor, created: vendorCreated } = await findOrCreateVendorByName(row.vendorName);
       if (vendorCreated) vendorsCreated++;
@@ -383,7 +396,7 @@ export async function importAccountsPayableCSV(rows: ImportRow[]) {
           errors.push(`เลขที่ใบแจ้งหนี้ ${row.invoiceNumber}: ถูกดึงไปใช้ในใบเตรียมจ่ายแล้ว ข้ามการอัปเดต`);
           continue;
         }
-        const data = { vendorId: vendor.id, invoiceDate, dueDate, amount, vatAmount, totalAmount, accountId };
+        const data = { vendorId: vendor.id, poId, invoiceDate, dueDate, amount, vatAmount, totalAmount, accountId };
         await prisma.accountsPayable.update({ where: { id: existing.id }, data });
         updated++;
         toUpdateInSheet.push({ id: existing.id, data });
@@ -393,6 +406,7 @@ export async function importAccountsPayableCSV(rows: ImportRow[]) {
           data: {
             apNumber,
             vendorId: vendor.id,
+            poId,
             accountId,
             invoiceNumber: row.invoiceNumber,
             invoiceDate,

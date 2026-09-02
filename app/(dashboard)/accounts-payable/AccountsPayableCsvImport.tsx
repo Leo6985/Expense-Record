@@ -12,6 +12,7 @@ type APRow = {
   vatAmount?: number;
   totalAmount?: number;
   accountCode?: string;
+  poNumber?: string;
   notes?: string;
 };
 
@@ -23,7 +24,7 @@ type ImportResult = {
   errors: string[];
 };
 
-const HEADERS = ["invoiceDate", "invoiceNumber", "vendorName", "amount", "vatAmount", "totalAmount", "accountCode", "notes"];
+const HEADERS = ["invoiceDate", "invoiceNumber", "vendorName", "amount", "vatAmount", "totalAmount", "accountCode", "poNumber", "notes"];
 
 const THAI_LABEL_TO_KEY: Record<string, string> = {
   "วันที่ใบแจ้งหนี้": "invoiceDate",
@@ -33,6 +34,7 @@ const THAI_LABEL_TO_KEY: Record<string, string> = {
   "ภาษีมูลค่าเพิ่ม": "vatAmount",
   "ยอดรวม": "totalAmount",
   "รหัสผังบัญชี": "accountCode",
+  "เลขที่ใบสั่งซื้อ": "poNumber",
   "หมายเหตุ": "notes",
 };
 
@@ -68,6 +70,7 @@ function rowsFromObjects(objects: Record<string, unknown>[]): APRow[] {
       vatAmount: toNumber(mapped["vatAmount"]),
       totalAmount: toNumber(mapped["totalAmount"]),
       accountCode: String(mapped["accountCode"] ?? "").trim() || undefined,
+      poNumber: String(mapped["poNumber"] ?? "").trim() || undefined,
       notes: String(mapped["notes"] ?? "").trim() || undefined,
     };
   });
@@ -246,9 +249,10 @@ export default function AccountsPayableCsvImport() {
 
               <div className="bg-gray-50 rounded-lg px-4 py-3 text-xs text-gray-500">
                 <p className="font-semibold text-gray-600 mb-1">คอลัมน์ที่รองรับ</p>
-                <code className="font-mono break-all">วันที่ใบแจ้งหนี้, เลขที่ใบแจ้งหนี้, ชื่อผู้ขาย, ยอดก่อนภาษี, ภาษีมูลค่าเพิ่ม, ยอดรวม, รหัสผังบัญชี, หมายเหตุ</code>
+                <code className="font-mono break-all">วันที่ใบแจ้งหนี้, เลขที่ใบแจ้งหนี้, ชื่อผู้ขาย, ยอดก่อนภาษี, ภาษีมูลค่าเพิ่ม, ยอดรวม, รหัสผังบัญชี, เลขที่ใบสั่งซื้อ, หมายเหตุ</code>
                 <p className="mt-1 text-gray-400">รูปแบบวันที่: YYYY-MM-DD (เช่น 2026-08-01) หรือ DD/MM/YYYY (เช่น 01/08/2026)</p>
                 <p className="mt-1 text-gray-400">ไม่ระบุ &quot;รหัสผังบัญชี&quot; จะใช้ 1140-20 (สินค้าสำเร็จรูปคงเหลือ) ให้อัตโนมัติ — วันครบกำหนดคำนวณจากเครดิตของผู้ขาย</p>
+                <p className="mt-1 text-gray-400">&quot;เลขที่ใบสั่งซื้อ&quot; ไม่บังคับ — ใส่เมื่อต้องการอ้างอิงกับ PO ที่มีอยู่แล้วในระบบเท่านั้น (ถ้าใส่แล้วไม่พบเลขที่ PO จะข้ามแถวนั้น)</p>
               </div>
 
               {parseError && (
@@ -278,7 +282,7 @@ export default function AccountsPayableCsvImport() {
                     <table className="text-xs w-full">
                       <thead>
                         <tr className="bg-gray-50 border-b border-gray-200">
-                          {["วันที่", "เลขที่ใบแจ้งหนี้", "ผู้ขาย", "ก่อนภาษี", "VAT", "รวม", "ผังบัญชี"].map((h) => (
+                          {["วันที่", "เลขที่ใบแจ้งหนี้", "ผู้ขาย", "ก่อนภาษี", "VAT", "รวม", "ผังบัญชี", "เลขที่ PO"].map((h) => (
                             <th key={h} className="text-left px-3 py-2 font-medium text-gray-600 whitespace-nowrap">{h}</th>
                           ))}
                         </tr>
@@ -293,10 +297,11 @@ export default function AccountsPayableCsvImport() {
                             <td className="px-3 py-1.5 text-right">{r.vatAmount ?? "-"}</td>
                             <td className="px-3 py-1.5 text-right font-medium">{r.totalAmount ?? "-"}</td>
                             <td className="px-3 py-1.5">{r.accountCode ?? "1140-20"}</td>
+                            <td className="px-3 py-1.5 font-mono">{r.poNumber ?? "-"}</td>
                           </tr>
                         ))}
                         {rows.length > 10 && (
-                          <tr><td colSpan={7} className="px-3 py-2 text-center text-gray-400">... และอีก {rows.length - 10} แถว</td></tr>
+                          <tr><td colSpan={8} className="px-3 py-2 text-center text-gray-400">... และอีก {rows.length - 10} แถว</td></tr>
                         )}
                       </tbody>
                     </table>
