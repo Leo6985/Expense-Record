@@ -2,6 +2,7 @@ import { getAccountsPayable } from "@/actions/accounts-payable";
 import Link from "next/link";
 import { formatDate, formatCurrency } from "@/lib/utils";
 import AccountsPayableCsvImport from "./AccountsPayableCsvImport";
+import DeleteAPButton from "./DeleteAPButton";
 
 const statusConfig: Record<string, { label: string; color: string }> = {
   PENDING: { label: "รอดำเนินการ", color: "bg-yellow-100 text-yellow-700" },
@@ -80,12 +81,13 @@ export default async function AccountsPayablePage({
                 <th className="text-left px-4 py-3 font-medium text-gray-600">วันครบกำหนด</th>
                 <th className="text-right px-4 py-3 font-medium text-gray-600">จำนวนเงิน</th>
                 <th className="text-left px-4 py-3 font-medium text-gray-600">สถานะ</th>
+                <th className="text-right px-4 py-3 font-medium text-gray-600">จัดการ</th>
               </tr>
             </thead>
             <tbody>
               {aps.length === 0 ? (
                 <tr>
-                  <td colSpan={8} className="px-4 py-8 text-center text-gray-400">ไม่พบข้อมูล</td>
+                  <td colSpan={9} className="px-4 py-8 text-center text-gray-400">ไม่พบข้อมูล</td>
                 </tr>
               ) : (
                 aps.map((ap) => {
@@ -111,6 +113,9 @@ export default async function AccountsPayablePage({
                         <span className={`inline-flex px-2 py-0.5 rounded-full text-xs font-medium ${isOverdue ? "bg-red-100 text-red-700" : s.color}`}>
                           {isOverdue ? "เกินกำหนด" : s.label}
                         </span>
+                      </td>
+                      <td className="px-4 py-3 text-right">
+                        {ap.status === "PENDING" && <DeleteAPButton apId={ap.id} apNumber={ap.apNumber} />}
                       </td>
                     </tr>
                   );

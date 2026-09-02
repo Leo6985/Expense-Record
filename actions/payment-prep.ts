@@ -50,9 +50,14 @@ async function syncPrepItemsToSheet(prepId: string, items: PaymentPrepItemRecord
   await paymentPrepItemsTable.replaceWhere((r) => r.prepId === prepId, items);
 }
 
-export async function getPaymentPreps(status?: string) {
+export async function getPaymentPreps(search?: string, status?: string) {
   return prisma.paymentPrep.findMany({
-    where: status ? { status } : undefined,
+    where: {
+      ...(status ? { status } : {}),
+      // กรองตามชื่อผู้ขาย — prep ไม่มี vendor ตรง ๆ (แต่ละ item อ้างอิง AP ซึ่งมี vendor ของตัวเอง และ
+      // prep เดียวอาจรวมหลายผู้ขาย) จึงกรองผ่านรายการที่มีผู้ขายตรงกับคำค้นอย่างน้อยหนึ่งรายการ
+      ...(search ? { items: { some: { ap: { vendor: { name: { contains: search, mode: "insensitive" } } } } } } : {}),
+    },
     include: {
       items: {
         include: {

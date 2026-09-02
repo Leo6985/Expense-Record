@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
-import { getAccountsPayableById, getAdjacentAccountsPayableIds, approveAccountsPayable, unapproveAccountsPayable, cancelAccountsPayable } from "@/actions/accounts-payable";
+import { getAccountsPayableById, getAdjacentAccountsPayableIds, approveAccountsPayable, unapproveAccountsPayable, cancelAccountsPayable, deleteAccountsPayable } from "@/actions/accounts-payable";
 import { formatDate, formatCurrency } from "@/lib/utils";
 import Link from "next/link";
 import DocNav from "@/components/DocNav";
@@ -78,6 +78,19 @@ export default function APDetailPage() {
     setLoading(false);
   }
 
+  async function handleDelete() {
+    if (!confirm(`ยืนยันการลบใบตั้งหนี้ "${ap!.apNumber}"? การลบไม่สามารถย้อนกลับได้`)) return;
+    setLoading(true);
+    setError("");
+    try {
+      await deleteAccountsPayable(ap!.id);
+      router.push("/accounts-payable");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "เกิดข้อผิดพลาด");
+      setLoading(false);
+    }
+  }
+
   return (
     <div className="max-w-2xl">
       <div className="flex items-center gap-3 mb-6">
@@ -132,6 +145,15 @@ export default function APDetailPage() {
             className="border border-red-300 text-red-600 px-4 py-2 rounded-lg text-sm font-medium hover:bg-red-50 disabled:opacity-50 transition-colors"
           >
             ยกเลิก
+          </button>
+        )}
+        {ap.status === "PENDING" && (
+          <button
+            onClick={handleDelete}
+            disabled={loading}
+            className="border border-red-300 text-red-700 bg-red-50 px-4 py-2 rounded-lg text-sm font-medium hover:bg-red-100 disabled:opacity-50 transition-colors"
+          >
+            ลบ
           </button>
         )}
       </div>

@@ -256,6 +256,38 @@ export async function cancelAccountsPayable(id: string) {
   revalidatePath(`/accounts-payable/${id}`);
 }
 
+// Hard-deletes an AP — unlike cancelAccountsPayable (which keeps the record as an audit trail
+// with status CANCELLED), this removes it entirely. Only allowed while still PENDING (mirrors
+// deleteReceipt's "DRAFT-only" rule) — once approved, unapprove it back to PENDING first, or
+// use cancel to keep the audit trail instead. Also blocked if any PaymentPrepItem references
+// this AP at all (even from a cancelled prep), since that FK has no onDelete: Cascade and
+// Postgres would otherwise reject the delete.
+export async function deleteAccountsPayable(id: string) {
+  const ap = await prisma.accountsPayable.findUnique({
+    where: { id },
+    include: { _count: { select: { paymentPrepItems: true } } },
+  });
+  if (!ap) return;
+
+  if (ap.status !== "PENDING") {
+    throw new Error("ลบได้เฉพาะรายการที่ยังไม่อนุมัติเท่านั้น กรุณายกเลิกอนุมัติก่อน หรือใช้ปุ่มยกเลิกแทน");
+  }
+  if (ap._count.paymentPrepItems > 0) {
+    throw new Error(
+      `ไม่สามารถลบใบตั้งหนี้ "${ap.apNumber}" ได้ เนื่องจากมีการดึงไปใช้ในใบเตรียมจ่ายแล้ว กรุณายกเลิกรายการนั้นก่อน`
+    );
+  }
+
+  await prisma.accountsPayable.delete({ where: { id } });
+  try {
+    await accountsPayableTable.delete(id);
+  } catch (err) {
+    console.error("Sheet cleanup failed after deleteAccountsPayable:", err);
+  }
+
+  revalidatePath("/accounts-payable");
+}
+
 // Lists APs still open for a payment prep, with each one's unclaimed balance.
 // When editing an existing DRAFT prep, pass its id as `excludePrepId` so that
 // prep's own items don't count against the AP's remaining balance.

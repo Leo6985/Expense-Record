@@ -9,8 +9,13 @@ const statusConfig: Record<string, { label: string; color: string }> = {
   CANCELLED: { label: "ยกเลิก", color: "bg-red-100 text-red-700" },
 };
 
-export default async function PaymentPrepPage() {
-  const preps = await getPaymentPreps();
+export default async function PaymentPrepPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ q?: string; status?: string }>;
+}) {
+  const { q, status } = await searchParams;
+  const preps = await getPaymentPreps(q, status);
 
   return (
     <div>
@@ -30,6 +35,30 @@ export default async function PaymentPrepPage() {
       </div>
 
       <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+        <div className="p-4 border-b border-gray-100 flex gap-3">
+          <form className="flex-1 flex gap-3">
+            <input
+              name="q"
+              defaultValue={q}
+              placeholder="ค้นหาชื่อผู้ขาย..."
+              className="flex-1 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
+            <select
+              name="status"
+              defaultValue={status ?? ""}
+              className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+            >
+              <option value="">ทุกสถานะ</option>
+              {Object.entries(statusConfig).map(([k, v]) => (
+                <option key={k} value={k}>{v.label}</option>
+              ))}
+            </select>
+            <button type="submit" className="bg-gray-100 text-gray-700 px-4 py-2 rounded-lg text-sm hover:bg-gray-200">
+              ค้นหา
+            </button>
+          </form>
+        </div>
+
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
