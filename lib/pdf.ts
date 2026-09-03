@@ -666,43 +666,82 @@ export type JournalVoucherData = {
   }[];
 };
 
-/** Real PDF (Sarabun-embedded) for the general-journal voucher — laid out to match the
- * บริษัท เคมเทค อินโนเวชั่น จำกัด "สมุดรายวันทั่วไป" paper form: เลขที่บัญชี | แผนก |
- * รายละเอียด | เดบิต | เครดิต, a totals row, the amount in Thai words, and a signature block. */
+/** Real PDF (Sarabun-embedded) for the general-journal voucher — bordered-card print style
+ * matching exportDebitCreditNotePDF: เลขที่บัญชี | แผนก | รายละเอียด | เดบิต | เครดิต,
+ * a totals row, the amount in Thai words, and a compact signature block. */
 export function exportJournalVoucherPDF(data: JournalVoucherData) {
   const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
   registerThaiFont(doc);
-  doc.setLineHeightFactor(1.5);
+  doc.setLineHeightFactor(1.4);
   patchThaiMarkStacking(doc);
+  const lineHeightMM = (fontSizePt: number) =>
+    (fontSizePt / doc.internal.scaleFactor) * doc.getLineHeightFactor();
 
   const left = 15;
   const right = 195;
-  let y = 18;
+  const width = right - left;
+  const padX = 4;
+  const padTop = 5;
+  let y = 20;
 
+  // Header: company left, document title right
+  doc.setTextColor(...GRAY_900);
   doc.setFont("Sarabun", "bold");
-  doc.setFontSize(13);
-  doc.text(COMPANY.name, 105, y, { align: "center" });
-  y += 5;
+  doc.setFontSize(11);
+  doc.text(COMPANY.name, left, y);
   doc.setFont("Sarabun", "normal");
-  doc.setFontSize(8.5);
-  doc.text(COMPANY.address, 105, y, { align: "center" });
-  y += 6;
-  doc.setFont("Sarabun", "bold");
-  doc.setFontSize(14);
-  doc.text("สมุดรายวันทั่วไป", 105, y, { align: "center" });
-
-  doc.setFont("Sarabun", "normal");
-  doc.setFontSize(9.5);
-  doc.text(`เลขที่  ${data.voucherNumber}`, right, 16, { align: "right" });
-  doc.text(`วันที่  ${formatDateStr(data.voucherDate)}`, right, 21, { align: "right" });
-
-  y += 6;
-  doc.setFont("Sarabun", "bold");
-  doc.setFontSize(9.5);
-  doc.text("รายละเอียด :", left, y);
-  doc.setFont("Sarabun", "normal");
-  doc.text(doc.splitTextToSize(data.description, right - left - 25), left + 22, y);
+  doc.setFontSize(8);
+  doc.setTextColor(...GRAY_600);
+  y += 4.5;
+  doc.text(COMPANY.address, left, y);
   y += 4;
+  doc.text(`เลขประจำตัวผู้เสียภาษี ${COMPANY.taxId}`, left, y);
+  y += 4;
+  doc.text(`โทร ${COMPANY.phone}  |  ${COMPANY.email}`, left, y);
+
+  doc.setTextColor(...GRAY_900);
+  doc.setFont("Sarabun", "bold");
+  doc.setFontSize(18);
+  doc.text("สมุดรายวันทั่วไป", right, 21, { align: "right" });
+  doc.setFont("Sarabun", "normal");
+  doc.setFontSize(9);
+  doc.setTextColor(...GRAY_500);
+  doc.text("GENERAL JOURNAL", right, 26, { align: "right" });
+  doc.setFontSize(9.5);
+  doc.text("เลขที่ ", right - doc.getTextWidth(data.voucherNumber) - 1, 32, { align: "right" });
+  doc.setFont("Sarabun", "bold");
+  doc.setTextColor(...BLUE_700);
+  doc.text(data.voucherNumber, right, 32, { align: "right" });
+  doc.setFont("Sarabun", "normal");
+  doc.setTextColor(...GRAY_500);
+  doc.text("วันที่ ", right - doc.getTextWidth(formatDateStr(data.voucherDate)) - 1, 37, { align: "right" });
+  doc.setTextColor(...GRAY_900);
+  doc.text(formatDateStr(data.voucherDate), right, 37, { align: "right" });
+
+  y = 42;
+  doc.setDrawColor(...GRAY_900);
+  doc.setLineWidth(0.5);
+  doc.line(left, y, right, y);
+  y += 6;
+
+  // Description box
+  doc.setFont("Sarabun", "bold");
+  doc.setFontSize(9);
+  doc.setTextColor(...GRAY_700);
+  doc.text("รายละเอียด", left, y);
+  doc.setDrawColor(...GRAY_300);
+  doc.setLineWidth(0.3);
+  doc.line(left, y + 1.5, right, y + 1.5);
+  y += 5;
+
+  doc.setFont("Sarabun", "normal");
+  doc.setFontSize(9);
+  doc.setTextColor(...GRAY_700);
+  const descLines = doc.splitTextToSize(data.description || "-", width - padX * 2);
+  const descBoxH = Math.max(descLines.length * lineHeightMM(9) + padTop, 13);
+  doc.roundedRect(left, y, width, descBoxH, 2, 2, "S");
+  doc.text(descLines, left + padX, y + padTop);
+  y += descBoxH + 7;
 
   const totalDebit = data.lines.reduce((s, l) => s + l.debit, 0);
   const totalCredit = data.lines.reduce((s, l) => s + l.credit, 0);
@@ -719,57 +758,63 @@ export function exportJournalVoucherPDF(data: JournalVoucherData) {
       l.credit ? formatNum(l.credit) : "",
     ]),
     foot: [["", "", "รวม", formatNum(totalDebit), formatNum(totalCredit)]],
-    styles: { font: "Sarabun", fontSize: 9, cellPadding: 2 },
-    headStyles: { fillColor: [30, 64, 175], textColor: 255, fontStyle: "normal", halign: "center" },
-    footStyles: { fillColor: [243, 244, 246], textColor: 20, fontStyle: "bold" },
+    theme: "striped",
+    styles: { font: "Sarabun", fontSize: 9, cellPadding: { top: 2.2, bottom: 2.2, left: 3, right: 3 }, textColor: GRAY_700 },
+    headStyles: { fillColor: [31, 41, 55], textColor: 255, fontStyle: "normal", halign: "left" },
+    alternateRowStyles: { fillColor: [249, 250, 251] },
+    footStyles: { fillColor: [237, 242, 247], textColor: GRAY_900, fontStyle: "bold" },
     columnStyles: {
-      0: { cellWidth: 24 },
+      0: { cellWidth: 22, fontStyle: "bold" },
       1: { cellWidth: 22 },
-      3: { halign: "right", cellWidth: 28 },
-      4: { halign: "right", cellWidth: 28 },
+      3: { halign: "right", cellWidth: 27 },
+      4: { halign: "right", cellWidth: 27 },
     },
   });
 
-  y = (doc as jsPDF & { lastAutoTable: { finalY: number } }).lastAutoTable.finalY + 6;
+  y = (doc as jsPDF & { lastAutoTable: { finalY: number } }).lastAutoTable.finalY + 7;
 
   doc.setFont("Sarabun", "bold");
-  doc.setFontSize(9.5);
+  doc.setFontSize(9);
+  doc.setTextColor(...GRAY_700);
   doc.text("จำนวนเงิน (ตัวอักษร)", left, y);
   doc.setFont("Sarabun", "normal");
+  doc.setTextColor(...GRAY_900);
   doc.text(`(${numberToThaiBahtText(totalDebit)})`, left + 34, y);
   y += 7;
 
   if (data.notes) {
     doc.setFont("Sarabun", "bold");
+    doc.setTextColor(...GRAY_700);
     doc.text("หมายเหตุ", left, y);
     doc.setFont("Sarabun", "normal");
-    doc.text(doc.splitTextToSize(data.notes, right - left - 22), left + 20, y);
-    y += 7;
+    doc.setTextColor(...GRAY_600);
+    const notesLines = doc.splitTextToSize(data.notes, width - 22);
+    doc.text(notesLines, left + 20, y);
+    y += notesLines.length * lineHeightMM(9) + 3;
   }
 
-  // Signature block: two rows of three, matching the paper form
-  y = Math.max(y + 16, 235);
-  const cols = [left + 18, 105, right - 18];
-  const rows: [string, string, string][] = [
-    ["ผู้จัดทำ", "ผู้ตรวจสอบ", "ผจก.ฝ่ายบัญชี"],
-    ["ผู้ช่วยกรรมการผู้จัดการ", "กรรมการผู้จัดการ", "ผู้รับเงิน"],
-  ];
+  // Signature block: one row of three — line above, role label, name — centered under each
+  y = Math.max(y + 14, 245);
+  const colCenters = [left + width * 0.17, left + width * 0.5, left + width * 0.83];
+  const names = [data.createdByName, null, data.approvedByName];
+  const roles = ["ผู้จัดทำ", "ผู้ตรวจสอบ", "ผจก.ฝ่ายบัญชี"];
+  const lineHalfW = 26;
+
+  doc.setFont("Sarabun", "normal");
   doc.setFontSize(9);
-  for (const row of rows) {
-    doc.setDrawColor(120);
-    doc.setLineWidth(0.3);
-    row.forEach((label, i) => {
-      const cx = cols[i];
-      doc.line(cx - 22, y, cx + 22, y);
-      doc.setFont("Sarabun", "normal");
-      doc.text(label, cx, y + 5, { align: "center" });
-      if (i === 0 && row === rows[0] && data.createdByName)
-        doc.text(data.createdByName, cx, y - 2, { align: "center" });
-      if (i === 2 && row === rows[0] && data.approvedByName)
-        doc.text(data.approvedByName, cx, y - 2, { align: "center" });
-    });
-    y += 20;
-  }
+  colCenters.forEach((cx, i) => {
+    doc.setTextColor(...GRAY_900);
+    if (names[i]) doc.text(names[i] as string, cx, y - 2.5, { align: "center" });
+    doc.setDrawColor(...GRAY_400);
+    doc.setLineWidth(0.4);
+    doc.line(cx - lineHalfW, y, cx + lineHalfW, y);
+    doc.setTextColor(...GRAY_600);
+    doc.text(roles[i], cx, y + 5, { align: "center" });
+    doc.setTextColor(...GRAY_400);
+    doc.setFontSize(8);
+    doc.text("วันที่ ........./........./.........", cx, y + 10, { align: "center" });
+    doc.setFontSize(9);
+  });
 
   doc.save(`${data.voucherNumber}.pdf`);
 }
