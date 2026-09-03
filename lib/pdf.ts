@@ -648,6 +648,132 @@ export function exportReceiptVoucherPDF(data: ReceiptVoucherData) {
   doc.save(`RV_${data.receiptNumber}.pdf`);
 }
 
+export type JournalVoucherData = {
+  voucherNumber: string;
+  voucherDate: Date | string;
+  description: string;
+  notes?: string | null;
+  status: string;
+  createdByName?: string | null;
+  approvedByName?: string | null;
+  lines: {
+    accountCode: string;
+    accountName: string;
+    department?: string | null;
+    description?: string | null;
+    debit: number;
+    credit: number;
+  }[];
+};
+
+/** Real PDF (Sarabun-embedded) for the general-journal voucher — laid out to match the
+ * บริษัท เคมเทค อินโนเวชั่น จำกัด "สมุดรายวันทั่วไป" paper form: เลขที่บัญชี | แผนก |
+ * รายละเอียด | เดบิต | เครดิต, a totals row, the amount in Thai words, and a signature block. */
+export function exportJournalVoucherPDF(data: JournalVoucherData) {
+  const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
+  registerThaiFont(doc);
+  doc.setLineHeightFactor(1.5);
+  patchThaiMarkStacking(doc);
+
+  const left = 15;
+  const right = 195;
+  let y = 18;
+
+  doc.setFont("Sarabun", "bold");
+  doc.setFontSize(13);
+  doc.text(COMPANY.name, 105, y, { align: "center" });
+  y += 5;
+  doc.setFont("Sarabun", "normal");
+  doc.setFontSize(8.5);
+  doc.text(COMPANY.address, 105, y, { align: "center" });
+  y += 6;
+  doc.setFont("Sarabun", "bold");
+  doc.setFontSize(14);
+  doc.text("สมุดรายวันทั่วไป", 105, y, { align: "center" });
+
+  doc.setFont("Sarabun", "normal");
+  doc.setFontSize(9.5);
+  doc.text(`เลขที่  ${data.voucherNumber}`, right, 16, { align: "right" });
+  doc.text(`วันที่  ${formatDateStr(data.voucherDate)}`, right, 21, { align: "right" });
+
+  y += 6;
+  doc.setFont("Sarabun", "bold");
+  doc.setFontSize(9.5);
+  doc.text("รายละเอียด :", left, y);
+  doc.setFont("Sarabun", "normal");
+  doc.text(doc.splitTextToSize(data.description, right - left - 25), left + 22, y);
+  y += 4;
+
+  const totalDebit = data.lines.reduce((s, l) => s + l.debit, 0);
+  const totalCredit = data.lines.reduce((s, l) => s + l.credit, 0);
+
+  autoTable(doc, {
+    startY: y,
+    margin: { left, right: 15 },
+    head: [["เลขที่บัญชี", "แผนก", "รายละเอียด", "เดบิต", "เครดิต"]],
+    body: data.lines.map((l) => [
+      l.accountCode,
+      l.department ?? "",
+      l.description || l.accountName,
+      l.debit ? formatNum(l.debit) : "",
+      l.credit ? formatNum(l.credit) : "",
+    ]),
+    foot: [["", "", "รวม", formatNum(totalDebit), formatNum(totalCredit)]],
+    styles: { font: "Sarabun", fontSize: 9, cellPadding: 2 },
+    headStyles: { fillColor: [30, 64, 175], textColor: 255, fontStyle: "normal", halign: "center" },
+    footStyles: { fillColor: [243, 244, 246], textColor: 20, fontStyle: "bold" },
+    columnStyles: {
+      0: { cellWidth: 24 },
+      1: { cellWidth: 22 },
+      3: { halign: "right", cellWidth: 28 },
+      4: { halign: "right", cellWidth: 28 },
+    },
+  });
+
+  y = (doc as jsPDF & { lastAutoTable: { finalY: number } }).lastAutoTable.finalY + 6;
+
+  doc.setFont("Sarabun", "bold");
+  doc.setFontSize(9.5);
+  doc.text("จำนวนเงิน (ตัวอักษร)", left, y);
+  doc.setFont("Sarabun", "normal");
+  doc.text(`(${numberToThaiBahtText(totalDebit)})`, left + 34, y);
+  y += 7;
+
+  if (data.notes) {
+    doc.setFont("Sarabun", "bold");
+    doc.text("หมายเหตุ", left, y);
+    doc.setFont("Sarabun", "normal");
+    doc.text(doc.splitTextToSize(data.notes, right - left - 22), left + 20, y);
+    y += 7;
+  }
+
+  // Signature block: two rows of three, matching the paper form
+  y = Math.max(y + 16, 235);
+  const cols = [left + 18, 105, right - 18];
+  const rows: [string, string, string][] = [
+    ["ผู้จัดทำ", "ผู้ตรวจสอบ", "ผจก.ฝ่ายบัญชี"],
+    ["ผู้ช่วยกรรมการผู้จัดการ", "กรรมการผู้จัดการ", "ผู้รับเงิน"],
+  ];
+  doc.setFontSize(9);
+  for (const row of rows) {
+    doc.setDrawColor(120);
+    doc.setLineWidth(0.3);
+    row.forEach((label, i) => {
+      const cx = cols[i];
+      doc.line(cx - 22, y, cx + 22, y);
+      doc.setFont("Sarabun", "normal");
+      doc.text(label, cx, y + 5, { align: "center" });
+      if (i === 0 && row === rows[0] && data.createdByName)
+        doc.text(data.createdByName, cx, y - 2, { align: "center" });
+      if (i === 2 && row === rows[0] && data.approvedByName)
+        doc.text(data.approvedByName, cx, y - 2, { align: "center" });
+    });
+    y += 20;
+  }
+
+  doc.save(`${data.voucherNumber}.pdf`);
+}
+
 const NOTE_TYPE_TITLE: Record<string, { th: string; en: string }> = {
   DEBIT: { th: "ใบเพิ่มหนี้", en: "Debit Note" },
   CREDIT: { th: "ใบลดหนี้", en: "Credit Note" },

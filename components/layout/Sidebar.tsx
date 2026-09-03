@@ -31,6 +31,13 @@ const menuGroups: MenuGroup[] = [
     ],
   },
   {
+    label: "บันทึกบัญชี",
+    roles: ["ACCOUNTING", "OWNER"],
+    items: [
+      { href: "/journal-vouchers", label: "สมุดรายวันทั่วไป", icon: "📓" },
+    ],
+  },
+  {
     label: "ข้อมูลหลัก",
     roles: ["PURCHASING", "ACCOUNTING", "OWNER"],
     items: [

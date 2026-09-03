@@ -721,3 +721,75 @@ export const monthlyPayrollExpensesTable = new SheetTable<MonthlyPayrollExpenseR
   MONTHLY_PAYROLL_EXPENSE_TAB_NAME,
   MONTHLY_PAYROLL_EXPENSE_COLUMNS
 );
+
+export type JournalVoucherRecord = {
+  id: string;
+  voucherNumber: string;
+  voucherDate: Date;
+  description: string;
+  status: string;
+  totalDebit: number;
+  totalCredit: number;
+  notes: string | null;
+  createdByName: string | null;
+  createdById: string | null;
+  approvedByName: string | null;
+  approvedById: string | null;
+  approvedAt: Date | null;
+  createdAt: Date;
+  updatedAt: Date;
+};
+
+export const JOURNAL_VOUCHER_TAB_NAME = "JournalVouchers";
+
+export const JOURNAL_VOUCHER_COLUMNS: ColumnDef[] = [
+  { key: "id", type: "string" },
+  { key: "voucherNumber", type: "string" },
+  { key: "voucherDate", type: "date" },
+  { key: "description", type: "string" },
+  { key: "status", type: "string" },
+  { key: "totalDebit", type: "number" },
+  { key: "totalCredit", type: "number" },
+  { key: "notes", type: "string" },
+  { key: "createdByName", type: "string" },
+  { key: "createdById", type: "string" },
+  { key: "approvedByName", type: "string" },
+  { key: "approvedById", type: "string" },
+  { key: "approvedAt", type: "date" },
+  { key: "createdAt", type: "date" },
+  { key: "updatedAt", type: "date" },
+];
+
+export const journalVouchersTable = new SheetTable<JournalVoucherRecord>(
+  JOURNAL_VOUCHER_TAB_NAME,
+  JOURNAL_VOUCHER_COLUMNS
+);
+
+export type JournalVoucherLineRecord = {
+  id: string;
+  voucherId: string;
+  lineNo: number;
+  accountId: string;
+  department: string | null;
+  description: string | null;
+  debit: number;
+  credit: number;
+};
+
+export const JOURNAL_VOUCHER_LINE_TAB_NAME = "JournalVoucherLines";
+
+export const JOURNAL_VOUCHER_LINE_COLUMNS: ColumnDef[] = [
+  { key: "id", type: "string" },
+  { key: "voucherId", type: "string" },
+  { key: "lineNo", type: "number" },
+  { key: "accountId", type: "string" },
+  { key: "department", type: "string" },
+  { key: "description", type: "string" },
+  { key: "debit", type: "number" },
+  { key: "credit", type: "number" },
+];
+
+export const journalVoucherLinesTable = new SheetTable<JournalVoucherLineRecord>(
+  JOURNAL_VOUCHER_LINE_TAB_NAME,
+  JOURNAL_VOUCHER_LINE_COLUMNS
+);

@@ -55,6 +55,7 @@ model ChartOfAccount {
   products               Product[]
   accountsPayable        AccountsPayable[]
   monthlyPayrollExpenses MonthlyPayrollExpense[]
+  journalVoucherLines    JournalVoucherLine[]
 }
 
 model Product {
@@ -374,4 +375,40 @@ model MonthlyPayrollExpense {
   updatedAt DateTime       @updatedAt
 
   @@unique([year, accountId])
+}
+
+// สมุดรายวันทั่วไป (General Journal / Journal Voucher) — บันทึกรายการปรับปรุง/รายการทั่วไป
+// แบบเดบิต-เครดิตด้วยมือ. เป็นทะเบียนเอกสารอิสระ ไม่ผูกกับงบกำไรขาดทุนหรือรายงานอื่น.
+// เดบิตรวมต้องเท่ากับเครดิตรวมจึงจะบันทึก/อนุมัติได้. อนุมัติแล้วแก้ไม่ได้จนกว่าจะยกเลิกอนุมัติ.
+model JournalVoucher {
+  id            String    @id @default(cuid())
+  voucherNumber String    @unique
+  voucherDate   DateTime
+  description   String // รายละเอียด (คำอธิบายรวมของใบสำคัญ)
+  status        String    @default("DRAFT") // DRAFT | APPROVED
+  totalDebit    Float     @default(0)
+  totalCredit   Float     @default(0)
+  notes         String?
+  createdByName String?
+  createdById   String?
+  approvedByName String?
+  approvedById  String?
+  approvedAt    DateTime?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  lines JournalVoucherLine[]
+}
+
+model JournalVoucherLine {
+  id          String         @id @default(cuid())
+  voucherId   String
+  voucher     JournalVoucher @relation(fields: [voucherId], references: [id], onDelete: Cascade)
+  lineNo      Int
+  accountId   String
+  account     ChartOfAccount @relation(fields: [accountId], references: [id])
+  department  String? // แผนก (ข้อความอิสระ)
+  description String? // รายละเอียดของบรรทัด
+  debit       Float          @default(0)
+  credit      Float          @default(0)
 }
