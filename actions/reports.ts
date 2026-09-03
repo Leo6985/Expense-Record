@@ -137,7 +137,7 @@ export async function getProfitLossReport(params: { year: number; month?: number
   const from = month ? new Date(year, month - 1, 1) : new Date(year, 0, 1);
   const to = month ? new Date(year, month, 1) : new Date(year + 1, 0, 1);
 
-  const [invoices, notes, aps] = await Promise.all([
+  const [invoices, notes, aps, payroll] = await Promise.all([
     prisma.salesInvoice.findMany({
       where: { status: { not: "CANCELLED" }, invoiceDate: { gte: from, lt: to } },
       select: { amount: true, invoiceDate: true },
@@ -164,7 +164,19 @@ export async function getProfitLossReport(params: { year: number; month?: number
         },
       },
     }),
+    // ค่าใช้จ่ายเงินเดือน/แรงงานรายเดือนที่กรอกในโมดูล "ทำต้นทุนเพิ่ม" — นำมารวมเป็นค่าใช้จ่ายเพิ่มเติมจาก AP
+    prisma.monthlyPayrollExpense.findMany({
+      where: { year },
+      select: {
+        m1: true, m2: true, m3: true, m4: true, m5: true, m6: true,
+        m7: true, m8: true, m9: true, m10: true, m11: true, m12: true,
+        account: { select: { id: true, code: true, name: true } },
+      },
+    }),
   ]);
+
+  const payrollMonths = (p: { [k: string]: unknown }) =>
+    Array.from({ length: 12 }, (_, i) => Number(p[`m${i + 1}`]) || 0);
 
   const revenue = round2(
     invoices.reduce((s, i) => s + i.amount, 0) +
@@ -188,6 +200,13 @@ export async function getProfitLossReport(params: { year: number; month?: number
       addToCategory(categoryMap, accountId, accountCode, accountName, (item.totalPrice / itemsSum) * ap.amount);
     }
   }
+  for (const p of payroll) {
+    const months = payrollMonths(p as unknown as { [k: string]: unknown });
+    const amount = month ? months[month - 1] : months.reduce((s, v) => s + v, 0);
+    if (amount === 0) continue;
+    expenses += amount;
+    addToCategory(categoryMap, p.account.id, p.account.code, p.account.name, amount);
+  }
   expenses = round2(expenses);
 
   const categoryBreakdown = Array.from(categoryMap.values())
@@ -201,6 +220,10 @@ export async function getProfitLossReport(params: { year: number; month?: number
     for (const inv of invoices) rev[inv.invoiceDate.getMonth()] += inv.amount;
     for (const n of notes) rev[n.noteDate.getMonth()] += n.type === "DEBIT" ? n.amount : -n.amount;
     for (const ap of aps) exp[ap.invoiceDate.getMonth()] += ap.amount;
+    for (const p of payroll) {
+      const months = payrollMonths(p as unknown as { [k: string]: unknown });
+      for (let i = 0; i < 12; i++) exp[i] += months[i];
+    }
     monthly = Array.from({ length: 12 }, (_, i) => ({
       month: i + 1,
       revenue: round2(rev[i]),

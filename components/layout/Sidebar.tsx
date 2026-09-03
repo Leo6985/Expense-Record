@@ -18,6 +18,7 @@ const menuGroups: MenuGroup[] = [
       { href: "/accounts-payable", label: "ตั้งหนี้ (AP)", icon: "📄" },
       { href: "/payment-prep", label: "ใบเตรียมจ่าย", icon: "📑" },
       { href: "/payments", label: "บันทึกชำระเงิน", icon: "💳" },
+      { href: "/payroll-expenses", label: "ค่าใช้จ่ายเงินเดือน (ทำต้นทุน)", icon: "🧑‍🏭" },
     ],
   },
   {
@@ -126,6 +127,7 @@ export default function Sidebar({ role, userName }: { role: string; userName: st
               if (item.href === "/accounts-payable" && role === "PURCHASING") return null;
               if (item.href === "/payment-prep" && role === "PURCHASING") return null;
               if (item.href === "/payments" && role === "PURCHASING") return null;
+              if (item.href === "/payroll-expenses" && role === "PURCHASING") return null;
               const isActive = pathname.startsWith(item.href);
               return (
                 <Link

@@ -52,8 +52,9 @@ model ChartOfAccount {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  products        Product[]
-  accountsPayable AccountsPayable[]
+  products               Product[]
+  accountsPayable        AccountsPayable[]
+  monthlyPayrollExpenses MonthlyPayrollExpense[]
 }
 
 model Product {
@@ -346,4 +347,31 @@ model InventorySnapshot {
   openingValue Float    @default(0)
   closingValue Float    @default(0)
   updatedAt    DateTime @updatedAt
+}
+
+// บันทึกค่าใช้จ่ายเงินเดือน/แรงงานรายเดือนสำหรับ "ทำต้นทุนเพิ่ม" ด้านค่าใช้จ่าย —
+// 1 แถวต่อ (ปี ค.ศ., ผังบัญชี) เก็บยอด 12 เดือน (m1..m12) กรอกทั้งปีในหน้าเดียว.
+// ผังบัญชีที่ใช้ถูกกำหนดไว้แบบตายตัวใน lib/payroll-expenses.ts (กลุ่มผลิต/ขาย/บริหาร).
+// ยอดเหล่านี้ถูกนำไปรวมเป็นค่าใช้จ่ายในงบกำไรขาดทุน (getProfitLossReport) เพิ่มเติมจาก AccountsPayable.
+model MonthlyPayrollExpense {
+  id        String         @id @default(cuid())
+  year      Int
+  accountId String
+  account   ChartOfAccount @relation(fields: [accountId], references: [id])
+  m1        Float          @default(0)
+  m2        Float          @default(0)
+  m3        Float          @default(0)
+  m4        Float          @default(0)
+  m5        Float          @default(0)
+  m6        Float          @default(0)
+  m7        Float          @default(0)
+  m8        Float          @default(0)
+  m9        Float          @default(0)
+  m10       Float          @default(0)
+  m11       Float          @default(0)
+  m12       Float          @default(0)
+  createdAt DateTime       @default(now())
+  updatedAt DateTime       @updatedAt
+
+  @@unique([year, accountId])
 }

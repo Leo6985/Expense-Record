@@ -674,3 +674,50 @@ export const inventorySnapshotsTable = new SheetTable<InventorySnapshotRecord>(
   INVENTORY_SNAPSHOT_TAB_NAME,
   INVENTORY_SNAPSHOT_COLUMNS
 );
+
+export type MonthlyPayrollExpenseRecord = {
+  id: string;
+  year: number;
+  accountId: string;
+  m1: number;
+  m2: number;
+  m3: number;
+  m4: number;
+  m5: number;
+  m6: number;
+  m7: number;
+  m8: number;
+  m9: number;
+  m10: number;
+  m11: number;
+  m12: number;
+  createdAt: Date;
+  updatedAt: Date;
+};
+
+export const MONTHLY_PAYROLL_EXPENSE_TAB_NAME = "MonthlyPayrollExpenses";
+
+export const MONTHLY_PAYROLL_EXPENSE_COLUMNS: ColumnDef[] = [
+  { key: "id", type: "string" },
+  { key: "year", type: "number" },
+  { key: "accountId", type: "string" },
+  { key: "m1", type: "number" },
+  { key: "m2", type: "number" },
+  { key: "m3", type: "number" },
+  { key: "m4", type: "number" },
+  { key: "m5", type: "number" },
+  { key: "m6", type: "number" },
+  { key: "m7", type: "number" },
+  { key: "m8", type: "number" },
+  { key: "m9", type: "number" },
+  { key: "m10", type: "number" },
+  { key: "m11", type: "number" },
+  { key: "m12", type: "number" },
+  { key: "createdAt", type: "date" },
+  { key: "updatedAt", type: "date" },
+];
+
+export const monthlyPayrollExpensesTable = new SheetTable<MonthlyPayrollExpenseRecord>(
+  MONTHLY_PAYROLL_EXPENSE_TAB_NAME,
+  MONTHLY_PAYROLL_EXPENSE_COLUMNS
+);
