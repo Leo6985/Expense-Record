@@ -793,3 +793,24 @@ export const journalVoucherLinesTable = new SheetTable<JournalVoucherLineRecord>
   JOURNAL_VOUCHER_LINE_TAB_NAME,
   JOURNAL_VOUCHER_LINE_COLUMNS
 );
+
+export type AccountingConfigRecord = {
+  id: string;
+  key: string;
+  accountId: string | null;
+  updatedAt: Date;
+};
+
+export const ACCOUNTING_CONFIG_TAB_NAME = "AccountingConfig";
+
+export const ACCOUNTING_CONFIG_COLUMNS: ColumnDef[] = [
+  { key: "id", type: "string" },
+  { key: "key", type: "string" },
+  { key: "accountId", type: "string" },
+  { key: "updatedAt", type: "date" },
+];
+
+export const accountingConfigTable = new SheetTable<AccountingConfigRecord>(
+  ACCOUNTING_CONFIG_TAB_NAME,
+  ACCOUNTING_CONFIG_COLUMNS
+);

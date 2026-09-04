@@ -412,3 +412,14 @@ model JournalVoucherLine {
   debit       Float          @default(0)
   credit      Float          @default(0)
 }
+
+// ผังบัญชีคุมยอด (control-account mapping) สำหรับบัญชีแยกประเภท/งบทดลอง — 1 แถวต่อ 1 key
+// (เช่น "ar", "ap", "vat_output", "bank:<companyBankAccountId>") ชี้ไปยังรหัสบัญชีในผังบัญชี.
+// ใช้โดย lib/ledger.ts เพื่อสังเคราะห์รายการเดบิต-เครดิตจากเอกสารต้นทาง (ขาย/ซื้อ/รับ/จ่าย).
+// ไม่มีคู่บัญชีในระบบเอกสารเดิม จึงต้องให้ผู้ใช้ระบุเองในหน้า /accounting-config.
+model AccountingConfig {
+  id        String   @id @default(cuid())
+  key       String   @unique
+  accountId String?
+  updatedAt DateTime @updatedAt
+}
