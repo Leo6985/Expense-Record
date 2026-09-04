@@ -746,10 +746,16 @@ export function exportJournalVoucherPDF(data: JournalVoucherData) {
   const totalDebit = data.lines.reduce((s, l) => s + l.debit, 0);
   const totalCredit = data.lines.reduce((s, l) => s + l.credit, 0);
 
+  // jspdf-autotable applies `columnStyles` to body rows ONLY — head/foot cells fall back to
+  // left align — so the เดบิต/เครดิต alignment has to be set per-cell on the head and foot
+  // rows too, otherwise the "รวม" totals don't line up under the line amounts.
+  const numHead = (label: string) => ({ content: label, styles: { halign: "right" as const } });
+  const numFoot = (value: string) => ({ content: value, styles: { halign: "right" as const } });
+
   autoTable(doc, {
     startY: y,
     margin: { left, right: 15 },
-    head: [["เลขที่บัญชี", "แผนก", "รายละเอียด", "เดบิต", "เครดิต"]],
+    head: [["เลขที่บัญชี", "แผนก", "รายละเอียด", numHead("เดบิต"), numHead("เครดิต")]],
     body: data.lines.map((l) => [
       l.accountCode,
       l.department ?? "",
@@ -757,7 +763,15 @@ export function exportJournalVoucherPDF(data: JournalVoucherData) {
       l.debit ? formatNum(l.debit) : "",
       l.credit ? formatNum(l.credit) : "",
     ]),
-    foot: [["", "", "รวม", formatNum(totalDebit), formatNum(totalCredit)]],
+    foot: [
+      [
+        "",
+        "",
+        { content: "รวม", styles: { halign: "right" as const } },
+        numFoot(formatNum(totalDebit)),
+        numFoot(formatNum(totalCredit)),
+      ],
+    ],
     theme: "striped",
     styles: { font: "Sarabun", fontSize: 9, cellPadding: { top: 2.2, bottom: 2.2, left: 3, right: 3 }, textColor: GRAY_700 },
     headStyles: { fillColor: [31, 41, 55], textColor: 255, fontStyle: "normal", halign: "left" },
