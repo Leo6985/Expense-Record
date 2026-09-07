@@ -35,6 +35,7 @@ const menuGroups: MenuGroup[] = [
     roles: ["ACCOUNTING", "OWNER"],
     items: [
       { href: "/journal-vouchers", label: "สมุดรายวันทั่วไป", icon: "📓" },
+      { href: "/sales-journal", label: "สมุดรายวันขาย", icon: "📗" },
       { href: "/general-ledger", label: "บัญชีแยกประเภท", icon: "📚" },
       { href: "/trial-balance", label: "งบทดลอง", icon: "⚖️" },
       { href: "/accounting-config", label: "ตั้งค่าผังบัญชีคุมยอด", icon: "⚙️" },

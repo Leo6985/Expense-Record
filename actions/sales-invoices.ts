@@ -11,6 +11,21 @@ import { parseImportDate } from "@/lib/import-dates";
 
 const AMOUNT_TOLERANCE = 0.01;
 
+// ห้ามยกเลิก/ลบใบกำกับที่ยังมีใบสำคัญ "สมุดรายวันขาย" ผูกอยู่ — ให้ลบ Voucher นั้นก่อน
+// (ยกเลิกอนุมัติก่อนถ้าอนุมัติแล้ว) เพื่อไม่ให้เหลือใบสำคัญที่อ้างถึงใบกำกับที่หายไป
+async function assertNoSalesJournalVoucher(invoiceId: string, verb: string) {
+  const voucher = await prisma.journalVoucher.findFirst({
+    where: { sourceType: "SI", sourceId: invoiceId },
+    select: { voucherNumber: true, status: true },
+  });
+  if (voucher) {
+    const approved = voucher.status === "APPROVED" ? " (ยกเลิกอนุมัติก่อน)" : "";
+    throw new Error(
+      `ไม่สามารถ${verb}ได้ เนื่องจากมีใบสำคัญสมุดรายวันขาย ${voucher.voucherNumber} ผูกอยู่ กรุณาลบใบสำคัญนั้นก่อน${approved}`
+    );
+  }
+}
+
 /**
  * Postgres remains authoritative (ReceiptItem.invoiceId still holds a real FK into this
  * table's id), so every write dual-writes into the Google Sheet as a synced mirror. If the
@@ -184,6 +199,8 @@ export async function cancelSalesInvoice(id: string) {
   const hasActiveReceipt = invoice.receiptItems.some((item) => item.receipt.status !== "CANCELLED");
   if (hasActiveReceipt) throw new Error("ไม่สามารถยกเลิกได้ เนื่องจากมีการตัดชำระผูกอยู่แล้ว");
 
+  await assertNoSalesJournalVoucher(id, "ยกเลิก");
+
   const updated = await prisma.salesInvoice.update({ where: { id }, data: { status: "CANCELLED" } });
   await syncInvoiceToSheet(updated);
 
@@ -208,6 +225,8 @@ export async function deleteSalesInvoice(id: string) {
       `ไม่สามารถลบใบกำกับภาษีขาย "${invoice.invoiceNumber}" ได้ เนื่องจากมีการตัดชำระหรือใบเพิ่ม/ลดหนี้ผูกอยู่ กรุณายกเลิกรายการเหล่านั้นก่อน`
     );
   }
+
+  await assertNoSalesJournalVoucher(id, "ลบ");
 
   await prisma.salesInvoice.delete({ where: { id } });
   try {

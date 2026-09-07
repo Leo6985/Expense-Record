@@ -271,7 +271,7 @@ model AccountsPayable {
   totalAmount    Float
   status         String          @default("PENDING")
   // หมวดบัญชี (ผังบัญชี) สำหรับ AP ที่ไม่ได้มาจากสาย PO/GR/Product (เช่น นำเข้า CSV หรือกรอกตั้งหนี้ตรง) —
-  // ใช้แยกหมวดในงบกำไรขาดทุนแทนที่จะตกเป็น "ไม่ระบุหมวดบัญชี" ทั้งหมด ดู getProfitLossReport
+  // ใช้แยกหมวดค่าใช้จ่ายในบัญชีแยกประเภท/งบทดลอง/งบกำไรขาดทุนแทนที่จะตกลงบัญชีพัก ดู buildLedger ใน actions/ledger.ts
   accountId      String?
   account        ChartOfAccount? @relation(fields: [accountId], references: [id])
   // เลขที่ใบสั่งซื้ออ้างอิงแบบพิมพ์เอง (ข้อความอิสระ ไม่ใช่ FK) — สำหรับ "สินค้า/บริการที่ซื้อมาเพื่อขาย"
@@ -339,9 +339,11 @@ model Payment {
   createdAt            DateTime           @default(now())
 }
 
-// Manual opening/closing inventory value per P&L period ("YYYY-MM" for a single month,
-// "YYYY" for a full year), used to compute ต้นทุนขาย (COGS) on the profit-loss report:
-// COGS = openingValue + purchases (from AccountsPayable) - closingValue.
+// Manual opening/closing inventory value per profit-loss period. periodKey is "YYYY-MM" for a
+// single whole month, "YYYY" for a whole calendar year, otherwise "<from>_<to>" (see
+// inventoryPeriodKey on the profit-loss page). The change (closingValue - openingValue) is
+// applied as an adjustment to the ledger-derived net profit (getProfitLossStatement); it is
+// NOT posted to the ledger, so it never affects the trial balance.
 model InventorySnapshot {
   id           String   @id @default(cuid())
   periodKey    String   @unique
@@ -353,7 +355,8 @@ model InventorySnapshot {
 // บันทึกค่าใช้จ่ายเงินเดือน/แรงงานรายเดือนสำหรับ "ทำต้นทุนเพิ่ม" ด้านค่าใช้จ่าย —
 // 1 แถวต่อ (ปี ค.ศ., ผังบัญชี) เก็บยอด 12 เดือน (m1..m12) กรอกทั้งปีในหน้าเดียว.
 // ผังบัญชีที่ใช้ถูกกำหนดไว้แบบตายตัวใน lib/payroll-expenses.ts (กลุ่มผลิต/ขาย/บริหาร).
-// ยอดเหล่านี้ถูกนำไปรวมเป็นค่าใช้จ่ายในงบกำไรขาดทุน (getProfitLossReport) เพิ่มเติมจาก AccountsPayable.
+// ยอดเหล่านี้ยังไม่ถูกลงบัญชีแยกประเภท จึงแสดงเป็น "รายการปรับปรุง" ในงบกำไรขาดทุน
+// (getProfitLossStatement ใน actions/ledger.ts) แยกจากตัวเลขที่มาจาก ledger และไม่กระทบงบทดลอง.
 model MonthlyPayrollExpense {
   id        String         @id @default(cuid())
   year      Int
@@ -378,8 +381,9 @@ model MonthlyPayrollExpense {
 }
 
 // สมุดรายวันทั่วไป (General Journal / Journal Voucher) — บันทึกรายการปรับปรุง/รายการทั่วไป
-// แบบเดบิต-เครดิตด้วยมือ. เป็นทะเบียนเอกสารอิสระ ไม่ผูกกับงบกำไรขาดทุนหรือรายงานอื่น.
+// แบบเดบิต-เครดิตด้วยมือ หรือสร้างอัตโนมัติจากเอกสารต้นทาง (เช่น สมุดรายวันขาย).
 // เดบิตรวมต้องเท่ากับเครดิตรวมจึงจะบันทึก/อนุมัติได้. อนุมัติแล้วแก้ไม่ได้จนกว่าจะยกเลิกอนุมัติ.
+// ใบสำคัญที่อนุมัติแล้วจะถูกนำเข้าบัญชีแยกประเภท/งบทดลอง (buildLedger step 1).
 model JournalVoucher {
   id            String    @id @default(cuid())
   voucherNumber String    @unique
@@ -389,6 +393,12 @@ model JournalVoucher {
   totalDebit    Float     @default(0)
   totalCredit   Float     @default(0)
   notes         String?
+  // ที่มาของใบสำคัญที่สร้างอัตโนมัติ: sourceType "SI" = สร้างจากใบกำกับภาษีขาย (สมุดรายวันขาย),
+  // sourceId = SalesInvoice.id (อ้างอิงหลวม ๆ ไม่มี FK). null ทั้งคู่ = สร้างเองในสมุดรายวันทั่วไป.
+  // @@unique([sourceType, sourceId]) กันสร้าง Voucher ซ้ำต่อ 1 เอกสารต้นทาง (Postgres ยอมให้ (null,null) ซ้ำได้).
+  // buildLedger จะข้ามการสังเคราะห์คู่บัญชีของ SalesInvoice ที่มี Voucher "SI" ที่อนุมัติแล้ว เพื่อไม่ให้นับซ้ำ.
+  sourceType    String?
+  sourceId      String?
   createdByName String?
   createdById   String?
   approvedByName String?
@@ -398,6 +408,8 @@ model JournalVoucher {
   updatedAt     DateTime  @updatedAt
 
   lines JournalVoucherLine[]
+
+  @@unique([sourceType, sourceId])
 }
 
 model JournalVoucherLine {

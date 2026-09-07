@@ -45,7 +45,7 @@ const reports = [
     href: "/reports/profit-loss",
     icon: "📈",
     title: "งบกำไรขาดทุน",
-    desc: "สรุปรายได้ ค่าใช้จ่าย และกำไร(ขาดทุน)สุทธิ ตามเดือนหรือปี",
+    desc: "รายได้ ค่าใช้จ่าย และกำไร(ขาดทุน)สุทธิ ดึงจากบัญชีแยกประเภทชุดเดียวกับงบทดลอง",
     color: "border-teal-200 bg-teal-50 hover:bg-teal-100",
     iconBg: "bg-teal-100",
   },

@@ -117,6 +117,8 @@ async function buildLedger(): Promise<BuiltLedger> {
         voucherNumber: true,
         voucherDate: true,
         description: true,
+        sourceType: true,
+        sourceId: true,
         lines: { select: { accountId: true, debit: true, credit: true } },
       },
     }),
@@ -210,6 +212,12 @@ async function buildLedger(): Promise<BuiltLedger> {
 
   const out: RawLedgerEntry[] = [];
 
+  // ใบกำกับภาษีขายที่มีใบสำคัญ "สมุดรายวันขาย" อนุมัติแล้ว — ข้ามการสังเคราะห์ในข้อ 2 เพื่อไม่ให้นับซ้ำ
+  // (คู่บัญชีของใบกำกับเหล่านี้เข้าบัญชีแยกประเภทผ่านใบสำคัญในข้อ 1 แทน)
+  const invoicesPostedViaVoucher = new Set(
+    jvs.filter((v) => v.sourceType === "SI" && v.sourceId).map((v) => v.sourceId as string)
+  );
+
   // 1) สมุดรายวันทั่วไป (เฉพาะอนุมัติแล้ว)
   for (const v of jvs) {
     const doc = new DocEntries({
@@ -226,8 +234,9 @@ async function buildLedger(): Promise<BuiltLedger> {
     out.push(...doc.balance(resolve("imbalance"), "imbalance"));
   }
 
-  // 2) ใบกำกับภาษีขาย
+  // 2) ใบกำกับภาษีขาย (ยกเว้นใบที่โพสต์ผ่านใบสำคัญสมุดรายวันขายที่อนุมัติแล้ว)
   for (const si of invoices) {
+    if (invoicesPostedViaVoucher.has(si.id)) continue;
     const doc = new DocEntries({
       date: si.invoiceDate,
       sourceType: "SI",
@@ -593,4 +602,141 @@ export async function getTrialBalance(params: { from: string; to: string }): Pro
     Math.abs(totals.closingDebit - totals.closingCredit) < 0.01;
 
   return { rows, totals, balanced, unsetKeys, from, to };
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// งบกำไรขาดทุน (Profit & Loss) — ดึงตัวเลขจาก ledger ชุดเดียวกับงบทดลอง
+// ─────────────────────────────────────────────────────────────────────────────
+//
+// รายได้/ค่าใช้จ่ายมาจาก buildLedger() โดยตรง (บัญชีประเภท REVENUE / EXPENSE) จึง "ดุล" กับงบทดลอง
+// เสมอ — เคลื่อนไหวช่วงเวลาของบัญชี REVENUE = เครดิต − เดบิต, ของ EXPENSE = เดบิต − เครดิต.
+//
+// ส่วนที่ยัง "ไม่ได้ลงบัญชีแยกประเภท" จะแยกออกมาเป็นรายการปรับปรุงต่างหาก ไม่ปนกับตัวเลข ledger:
+//   • ค่าใช้จ่ายเงินเดือน/แรงงานจากโมดูล "ทำต้นทุนเพิ่ม" (MonthlyPayrollExpense) — รายเดือน
+//   • การเปลี่ยนแปลงสินค้าคงเหลือ (InventorySnapshot) — จัดการฝั่งหน้าจอ
+// หน้า /reports/profit-loss เป็นผู้รวมยอดปรับปรุงเข้ากับกำไร(ขาดทุน)จาก ledger เพื่อแสดง "สุทธิหลังปรับปรุง".
+
+export type ProfitLossRow = {
+  accountId: string;
+  code: string;
+  name: string;
+  amount: number;
+};
+
+export type ProfitLossStatement = {
+  revenueRows: ProfitLossRow[];
+  expenseRows: ProfitLossRow[];
+  totalRevenue: number;
+  totalExpenses: number; // เฉพาะค่าใช้จ่ายจาก ledger
+  netProfit: number; // totalRevenue − totalExpenses (จาก ledger เท่านั้น)
+  payrollRows: ProfitLossRow[]; // ปรับปรุง: เงินเดือน/แรงงาน (ยังไม่ลง ledger)
+  payrollTotal: number;
+  unsetKeys: string[];
+  from: string;
+  to: string;
+};
+
+export async function getProfitLossStatement(params: {
+  from: string;
+  to: string;
+}): Promise<ProfitLossStatement> {
+  const { from, to } = params;
+  const fromDate = new Date(from);
+  const toDate = new Date(to);
+  toDate.setHours(23, 59, 59, 999);
+
+  const [{ entries, meta, unsetKeys }, payroll] = await Promise.all([
+    buildLedger(),
+    prisma.monthlyPayrollExpense.findMany({
+      select: {
+        year: true,
+        m1: true, m2: true, m3: true, m4: true, m5: true, m6: true,
+        m7: true, m8: true, m9: true, m10: true, m11: true, m12: true,
+        account: { select: { id: true, code: true, name: true } },
+      },
+    }),
+  ]);
+
+  // ── รายได้ / ค่าใช้จ่าย จาก ledger (เฉพาะรายการในช่วง from–to) ──
+  const agg = new Map<string, { debit: number; credit: number }>();
+  for (const e of entries) {
+    if (e.date < fromDate || e.date > toDate) continue;
+    const a = agg.get(e.accountId) ?? { debit: 0, credit: 0 };
+    a.debit += e.debit;
+    a.credit += e.credit;
+    agg.set(e.accountId, a);
+  }
+
+  const revenueRows: ProfitLossRow[] = [];
+  const expenseRows: ProfitLossRow[] = [];
+  for (const [accId, a] of agg) {
+    const m = meta.get(accId);
+    if (!m) continue;
+    if (m.type === "REVENUE") {
+      const amount = round2(a.credit - a.debit);
+      if (amount !== 0) revenueRows.push({ accountId: accId, code: m.code, name: m.name, amount });
+    } else if (m.type === "EXPENSE") {
+      const amount = round2(a.debit - a.credit);
+      if (amount !== 0) expenseRows.push({ accountId: accId, code: m.code, name: m.name, amount });
+    }
+  }
+
+  const bySortKey = (x: ProfitLossRow, y: ProfitLossRow) =>
+    (meta.get(x.accountId)?.sortKey ?? x.code).localeCompare(
+      meta.get(y.accountId)?.sortKey ?? y.code,
+      undefined,
+      { numeric: true }
+    );
+  revenueRows.sort(bySortKey);
+  expenseRows.sort(bySortKey);
+
+  // ── ปรับปรุง: ค่าใช้จ่ายเงินเดือน/แรงงาน (คิดเป็นรายเดือนเต็ม — รวมเฉพาะเดือนที่อยู่ในช่วง) ──
+  const monthsInRange = new Set<string>();
+  {
+    const d = new Date(fromDate.getFullYear(), fromDate.getMonth(), 1);
+    const end = new Date(toDate.getFullYear(), toDate.getMonth(), 1);
+    while (d <= end) {
+      monthsInRange.add(`${d.getFullYear()}-${d.getMonth() + 1}`);
+      d.setMonth(d.getMonth() + 1);
+    }
+  }
+  const payrollMap = new Map<string, ProfitLossRow>();
+  for (const p of payroll) {
+    const rec = p as unknown as { [k: string]: number };
+    let sum = 0;
+    for (let i = 1; i <= 12; i++) {
+      if (monthsInRange.has(`${p.year}-${i}`)) sum += Number(rec[`m${i}`]) || 0;
+    }
+    if (sum === 0) continue;
+    const existing = payrollMap.get(p.account.id);
+    if (existing) existing.amount = round2(existing.amount + sum);
+    else
+      payrollMap.set(p.account.id, {
+        accountId: p.account.id,
+        code: p.account.code,
+        name: p.account.name,
+        amount: round2(sum),
+      });
+  }
+  const payrollRows = Array.from(payrollMap.values()).sort((x, y) =>
+    x.code.localeCompare(y.code, undefined, { numeric: true })
+  );
+  const payrollTotal = round2(payrollRows.reduce((s, r) => s + r.amount, 0));
+
+  const totalRevenue = round2(revenueRows.reduce((s, r) => s + r.amount, 0));
+  const totalExpenses = round2(expenseRows.reduce((s, r) => s + r.amount, 0));
+  const netProfit = round2(totalRevenue - totalExpenses);
+
+  return {
+    revenueRows,
+    expenseRows,
+    totalRevenue,
+    totalExpenses,
+    netProfit,
+    payrollRows,
+    payrollTotal,
+    unsetKeys,
+    from,
+    to,
+  };
 }

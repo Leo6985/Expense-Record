@@ -351,8 +351,9 @@ type ImportRow = {
  * (poId/grId are already optional on this model), vendor auto-created by name if not found,
  * and the created AP flows into the existing PaymentPrep → Payment reconciliation exactly
  * like any other AP. Each row is tagged with accountId (defaulting to "สินค้าสำเร็จรูปคงเหลือ",
- * DEFAULT_RESALE_GOODS_ACCOUNT_CODE) so getProfitLossReport can categorize it correctly even
- * though it has no PO/GR/Product chain to derive a category from. poNumber is stored as-is into
+ * DEFAULT_RESALE_GOODS_ACCOUNT_CODE) so buildLedger (and the reports derived from it — trial
+ * balance, profit-loss) can categorize it correctly even though it has no PO/GR/Product chain
+ * to derive a category from. poNumber is stored as-is into
  * AccountsPayable.poNumberRef — a free-text reference, not a lookup against PurchaseOrder — so
  * these purchases don't require a PO to already exist in the system (per user decision: this
  * whole import path is explicitly for goods/services bought without going through the PO flow).
