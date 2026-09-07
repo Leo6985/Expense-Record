@@ -245,7 +245,24 @@ export async function unapproveAccountsPayable(id: string) {
   revalidatePath(`/accounts-payable/${id}`);
 }
 
+// ห้ามยกเลิก/ลบใบตั้งหนี้ที่ยังมีใบสำคัญ "สมุดรายวันซื้อ" ผูกอยู่ — ให้ลบใบสำคัญนั้นก่อน
+// (ยกเลิกอนุมัติก่อนถ้าอนุมัติแล้ว) เพื่อไม่ให้เหลือใบสำคัญที่อ้างถึงใบตั้งหนี้ที่หายไป
+async function assertNoPurchaseJournalVoucher(apId: string, verb: string) {
+  const voucher = await prisma.journalVoucher.findFirst({
+    where: { sourceType: "AP", sourceId: apId },
+    select: { voucherNumber: true, status: true },
+  });
+  if (voucher) {
+    const approved = voucher.status === "APPROVED" ? " (ยกเลิกอนุมัติก่อน)" : "";
+    throw new Error(
+      `ไม่สามารถ${verb}ได้ เนื่องจากมีใบสำคัญสมุดรายวันซื้อ ${voucher.voucherNumber} ผูกอยู่ กรุณาลบใบสำคัญนั้นก่อน${approved}`
+    );
+  }
+}
+
 export async function cancelAccountsPayable(id: string) {
+  await assertNoPurchaseJournalVoucher(id, "ยกเลิก");
+
   const ap = await prisma.accountsPayable.update({
     where: { id },
     data: { status: "CANCELLED" },
@@ -277,6 +294,8 @@ export async function deleteAccountsPayable(id: string) {
       `ไม่สามารถลบใบตั้งหนี้ "${ap.apNumber}" ได้ เนื่องจากมีการดึงไปใช้ในใบเตรียมจ่ายแล้ว กรุณายกเลิกรายการนั้นก่อน`
     );
   }
+
+  await assertNoPurchaseJournalVoucher(id, "ลบ");
 
   await prisma.accountsPayable.delete({ where: { id } });
   try {

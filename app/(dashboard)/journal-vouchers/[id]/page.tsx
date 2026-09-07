@@ -145,6 +145,18 @@ export default function JournalVoucherDetailPage() {
               </div>
             </div>
           )}
+          {voucher.sourceType === "AP" && voucher.sourceId && (
+            <div className="col-span-2">
+              <div className="text-xs text-gray-500">ที่มา</div>
+              <div className="font-medium">
+                สร้างจากใบตั้งหนี้ —{" "}
+                <Link href={`/accounts-payable/${voucher.sourceId}`} className="text-blue-700 hover:underline">
+                  ดูใบตั้งหนี้
+                </Link>{" "}
+                · <Link href="/purchase-journal" className="text-blue-700 hover:underline">สมุดรายวันซื้อ</Link>
+              </div>
+            </div>
+          )}
           {voucher.notes && <div className="col-span-2"><div className="text-xs text-gray-500">หมายเหตุ</div><div className="font-medium">{voucher.notes}</div></div>}
         </div>
 

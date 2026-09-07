@@ -212,10 +212,13 @@ async function buildLedger(): Promise<BuiltLedger> {
 
   const out: RawLedgerEntry[] = [];
 
-  // ใบกำกับภาษีขายที่มีใบสำคัญ "สมุดรายวันขาย" อนุมัติแล้ว — ข้ามการสังเคราะห์ในข้อ 2 เพื่อไม่ให้นับซ้ำ
-  // (คู่บัญชีของใบกำกับเหล่านี้เข้าบัญชีแยกประเภทผ่านใบสำคัญในข้อ 1 แทน)
+  // เอกสารต้นทางที่มีใบสำคัญอนุมัติแล้ว (สมุดรายวันขาย/ซื้อ) — ข้ามการสังเคราะห์คู่บัญชีในข้อ 2/6
+  // เพื่อไม่ให้นับซ้ำ (คู่บัญชีเข้าบัญชีแยกประเภทผ่านใบสำคัญในข้อ 1 แทน)
   const invoicesPostedViaVoucher = new Set(
     jvs.filter((v) => v.sourceType === "SI" && v.sourceId).map((v) => v.sourceId as string)
+  );
+  const apsPostedViaVoucher = new Set(
+    jvs.filter((v) => v.sourceType === "AP" && v.sourceId).map((v) => v.sourceId as string)
   );
 
   // 1) สมุดรายวันทั่วไป (เฉพาะอนุมัติแล้ว)
@@ -304,8 +307,10 @@ async function buildLedger(): Promise<BuiltLedger> {
     out.push(...doc.balance(resolve("imbalance"), "imbalance"));
   }
 
-  // 6) ตั้งหนี้ (AP) — แยกหมวดค่าใช้จ่ายแบบเดียวกับงบกำไรขาดทุน (getProfitLossReport)
+  // 6) ตั้งหนี้ (AP) — แยกหมวดค่าใช้จ่ายผ่านสาย GR/Product (ยกเว้นใบที่โพสต์ผ่านใบสำคัญสมุดรายวันซื้อ
+  //    ที่อนุมัติแล้ว)
   for (const ap of aps) {
+    if (apsPostedViaVoucher.has(ap.id)) continue;
     const doc = new DocEntries({
       date: ap.invoiceDate,
       sourceType: "AP",

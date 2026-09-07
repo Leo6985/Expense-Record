@@ -393,10 +393,11 @@ model JournalVoucher {
   totalDebit    Float     @default(0)
   totalCredit   Float     @default(0)
   notes         String?
-  // ที่มาของใบสำคัญที่สร้างอัตโนมัติ: sourceType "SI" = สร้างจากใบกำกับภาษีขาย (สมุดรายวันขาย),
-  // sourceId = SalesInvoice.id (อ้างอิงหลวม ๆ ไม่มี FK). null ทั้งคู่ = สร้างเองในสมุดรายวันทั่วไป.
+  // ที่มาของใบสำคัญที่สร้างอัตโนมัติ: sourceType "SI" = จากใบกำกับภาษีขาย (สมุดรายวันขาย),
+  // "AP" = จากใบตั้งหนี้ (สมุดรายวันซื้อ). sourceId = id ของเอกสารต้นทาง (อ้างอิงหลวม ๆ ไม่มี FK).
+  // null ทั้งคู่ = สร้างเองในสมุดรายวันทั่วไป.
   // @@unique([sourceType, sourceId]) กันสร้าง Voucher ซ้ำต่อ 1 เอกสารต้นทาง (Postgres ยอมให้ (null,null) ซ้ำได้).
-  // buildLedger จะข้ามการสังเคราะห์คู่บัญชีของ SalesInvoice ที่มี Voucher "SI" ที่อนุมัติแล้ว เพื่อไม่ให้นับซ้ำ.
+  // buildLedger จะข้ามการสังเคราะห์คู่บัญชีของเอกสารต้นทางที่มี Voucher ที่อนุมัติแล้ว เพื่อไม่ให้นับซ้ำ.
   sourceType    String?
   sourceId      String?
   createdByName String?

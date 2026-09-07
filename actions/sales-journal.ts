@@ -5,14 +5,14 @@ import { Prisma } from "@prisma/client";
 import { revalidatePath } from "next/cache";
 import { auth } from "@/auth";
 import {
-  journalVouchersTable,
-  journalVoucherLinesTable,
-  JournalVoucherRecord,
-  JournalVoucherLineRecord,
-} from "@/lib/sheets-tables";
-
-const round2 = (n: number) => Math.round(n * 100) / 100;
-const AMOUNT_TOLERANCE = 0.01;
+  round2,
+  AMOUNT_TOLERANCE,
+  voucherNumberSequencer,
+  toVoucherRecord,
+  toLineRecords,
+  syncGeneratedVouchersToSheet,
+} from "@/lib/auto-voucher";
+import { JournalVoucherRecord, JournalVoucherLineRecord } from "@/lib/sheets-tables";
 
 // ผังบัญชีคุมยอดที่จำเป็นสำหรับคู่บัญชีขาย (ดู lib/ledger.ts step 2)
 const REQUIRED_CONFIG_KEYS = ["ar", "revenue", "vat_output"] as const;
@@ -156,25 +156,9 @@ export async function generateSalesVouchers(params: {
   });
   const done = new Set(existing.map((e) => e.sourceId));
   const todo = invoices.filter((i) => !done.has(i.id));
-  if (todo.length === 0) return { created: 0, skipped: invoices.length, errors: [] };
+  if (todo.length === 0) return { created: 0, skipped: done.size, errors: [] };
 
-  // ลำดับเลขที่ใบสำคัญต่อ prefix เดือน (JV + ปี ค.ศ. + เดือน) — seed จากเลขล่าสุดในฐานข้อมูล
-  const seq = new Map<string, number>();
-  async function nextVoucherNumber(date: Date): Promise<string> {
-    const year = String(date.getUTCFullYear());
-    const month = String(date.getUTCMonth() + 1).padStart(2, "0");
-    const prefix = `JV${year}${month}`;
-    if (!seq.has(prefix)) {
-      const last = await prisma.journalVoucher.findFirst({
-        where: { voucherNumber: { startsWith: prefix } },
-        orderBy: { voucherNumber: "desc" },
-      });
-      seq.set(prefix, last ? parseInt(last.voucherNumber.slice(prefix.length)) || 0 : 0);
-    }
-    const n = seq.get(prefix)! + 1;
-    seq.set(prefix, n);
-    return `${prefix}${String(n).padStart(3, "0")}`;
-  }
+  const nextVoucherNumber = voucherNumberSequencer();
 
   let created = 0;
   let skipped = done.size;
@@ -231,35 +215,8 @@ export async function generateSalesVouchers(params: {
         include: { lines: { orderBy: { lineNo: "asc" } } },
       });
       created++;
-      voucherRecords.push({
-        id: voucher.id,
-        voucherNumber: voucher.voucherNumber,
-        voucherDate: voucher.voucherDate,
-        description: voucher.description,
-        status: voucher.status,
-        totalDebit: voucher.totalDebit,
-        totalCredit: voucher.totalCredit,
-        notes: voucher.notes,
-        createdByName: voucher.createdByName,
-        createdById: voucher.createdById,
-        approvedByName: voucher.approvedByName,
-        approvedById: voucher.approvedById,
-        approvedAt: voucher.approvedAt,
-        createdAt: voucher.createdAt,
-        updatedAt: voucher.updatedAt,
-      });
-      for (const l of voucher.lines) {
-        lineRecords.push({
-          id: l.id,
-          voucherId: voucher.id,
-          lineNo: l.lineNo,
-          accountId: l.accountId,
-          department: l.department,
-          description: l.description,
-          debit: l.debit,
-          credit: l.credit,
-        });
-      }
+      voucherRecords.push(toVoucherRecord(voucher));
+      lineRecords.push(...toLineRecords(voucher));
     } catch (err) {
       if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === "P2002") {
         skipped++; // มีผู้สร้าง Voucher ให้ใบกำกับนี้ไปแล้วระหว่างทาง
@@ -269,13 +226,7 @@ export async function generateSalesVouchers(params: {
     }
   }
 
-  // ซิงค์เข้า Google Sheet เป็นสำเนา (best-effort) — Postgres เป็นฐานหลักอยู่แล้ว
-  try {
-    if (voucherRecords.length > 0) await journalVouchersTable.createMany(voucherRecords);
-    if (lineRecords.length > 0) await journalVoucherLinesTable.createMany(lineRecords);
-  } catch (err) {
-    console.error("syncToSheet failed after generateSalesVouchers:", err);
-  }
+  await syncGeneratedVouchersToSheet(voucherRecords, lineRecords);
 
   revalidatePath("/sales-journal");
   revalidatePath("/journal-vouchers");
