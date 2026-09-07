@@ -760,3 +760,273 @@ export async function getProfitLossStatement(params: {
     to,
   };
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// งบแสดงฐานะทางการเงิน (Statement of Financial Position / Balance Sheet)
+// ─────────────────────────────────────────────────────────────────────────────
+//
+// ยอดคงเหลือ ณ วันที่กำหนด ของบัญชีประเภท ASSET / LIABILITY / EQUITY จาก buildLedger()
+// (ชุดเดียวกับงบทดลอง). "กำไร(ขาดทุน)สะสม" = รายได้สะสม − ค่าใช้จ่ายสะสม ถึงวันที่นั้น
+// (ระบบยังไม่มีรายการปิดบัญชีสิ้นปี จึงคำนวณให้เอง). สินทรัพย์ควร = หนี้สิน + ส่วนของผู้ถือหุ้น
+// เพราะงบทดลองดุลเสมอ — ผลต่าง (ถ้ามี) มาจากบัญชีคุมยอดที่ยังไม่ได้ตั้งค่า.
+// หมายเหตุ: ยอดยกมาก่อนเริ่มใช้ระบบ (เช่น openingBalance ของบัญชีธนาคาร) ไม่ได้ลงบัญชีแยกประเภท
+// จึงไม่รวมในงบนี้ เช่นเดียวกับงบทดลอง/งบกำไรขาดทุน.
+
+export type BalanceSheetRow = { accountId: string; code: string; name: string; amount: number };
+
+export type BalanceSheetResult = {
+  asOf: string;
+  assets: BalanceSheetRow[];
+  liabilities: BalanceSheetRow[];
+  equity: BalanceSheetRow[];
+  retainedEarnings: number;
+  totalAssets: number;
+  totalLiabilities: number;
+  totalEquity: number; // Σ equity accounts + retainedEarnings
+  unclassified: BalanceSheetRow[]; // บัญชีที่ยังไม่จัดหมวด (UNSET/UNKNOWN) ที่ยังมียอด
+  unclassifiedNet: number; // net (เดบิต − เครดิต) ของกลุ่มยังไม่จัดหมวด
+  diff: number; // totalAssets − (totalLiabilities + totalEquity); = −unclassifiedNet เมื่อข้อมูลครบ
+  balanced: boolean;
+  unsetKeys: string[];
+};
+
+export async function getBalanceSheet(params: { asOf: string }): Promise<BalanceSheetResult> {
+  const { asOf } = params;
+  const asOfDate = new Date(asOf);
+  asOfDate.setHours(23, 59, 59, 999);
+
+  const { entries, meta, unsetKeys } = await buildLedger();
+
+  const netByAccount = new Map<string, number>();
+  for (const e of entries) {
+    if (e.date > asOfDate) continue;
+    netByAccount.set(e.accountId, round2((netByAccount.get(e.accountId) ?? 0) + e.debit - e.credit));
+  }
+
+  const assets: BalanceSheetRow[] = [];
+  const liabilities: BalanceSheetRow[] = [];
+  const equity: BalanceSheetRow[] = [];
+  const unclassified: BalanceSheetRow[] = [];
+  let revenueCum = 0;
+  let expenseCum = 0;
+
+  for (const [accId, net] of netByAccount) {
+    if (Math.abs(net) < 0.005) continue;
+    const m = meta.get(accId) ?? { code: "?", name: "(ไม่ทราบบัญชี)", type: "UNKNOWN", sortKey: "zzzz" };
+    const row = (amount: number): BalanceSheetRow => ({ accountId: accId, code: m.code, name: m.name, amount: round2(amount) });
+    switch (m.type) {
+      case "ASSET":
+        assets.push(row(net));
+        break;
+      case "LIABILITY":
+        liabilities.push(row(-net));
+        break;
+      case "EQUITY":
+        equity.push(row(-net));
+        break;
+      case "REVENUE":
+        revenueCum = round2(revenueCum - net);
+        break;
+      case "EXPENSE":
+        expenseCum = round2(expenseCum + net);
+        break;
+      default:
+        unclassified.push(row(net));
+    }
+  }
+
+  const bySortKey = (x: BalanceSheetRow, y: BalanceSheetRow) =>
+    (meta.get(x.accountId)?.sortKey ?? x.code).localeCompare(meta.get(y.accountId)?.sortKey ?? y.code, undefined, { numeric: true });
+  assets.sort(bySortKey);
+  liabilities.sort(bySortKey);
+  equity.sort(bySortKey);
+  unclassified.sort(bySortKey);
+
+  const retainedEarnings = round2(revenueCum - expenseCum);
+  const totalAssets = round2(assets.reduce((s, r) => s + r.amount, 0));
+  const totalLiabilities = round2(liabilities.reduce((s, r) => s + r.amount, 0));
+  const totalEquity = round2(equity.reduce((s, r) => s + r.amount, 0) + retainedEarnings);
+  const unclassifiedNet = round2(unclassified.reduce((s, r) => s + r.amount, 0));
+  const diff = round2(totalAssets - (totalLiabilities + totalEquity));
+
+  return {
+    asOf,
+    assets,
+    liabilities,
+    equity,
+    retainedEarnings,
+    totalAssets,
+    totalLiabilities,
+    totalEquity,
+    unclassified,
+    unclassifiedNet,
+    diff,
+    balanced: Math.abs(diff) < 0.01,
+    unsetKeys,
+  };
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// งบกระแสเงินสด (Statement of Cash Flows) — วิธีตรง (direct method)
+// ─────────────────────────────────────────────────────────────────────────────
+//
+// "เงินสด" = บัญชีแยกที่ผูกไว้กับบัญชีธนาคารบริษัท (key "bank:<id>" หรือ "bank_default").
+// รายการที่แตะบัญชีเงินสดจะถูกจัดกลุ่มตามที่มา:
+//   • รับชำระ (RC / ใบสำคัญสมุดรายวันรับเงิน)  → กิจกรรมดำเนินงาน: รับจากลูกค้า
+//   • จ่ายเงิน (PAY / ใบสำคัญสมุดรายวันจ่ายเงิน) → กิจกรรมดำเนินงาน: จ่ายเจ้าหนี้/ค่าใช้จ่าย
+//   • สมุดรายวันทั่วไป → ดูประเภทบัญชีคู่: รายได้/ค่าใช้จ่าย/ลูกหนี้/เจ้าหนี้ = ดำเนินงาน,
+//     สินทรัพย์อื่น = ลงทุน, หนี้สินอื่น/ทุน = จัดหาเงิน
+// เงินสดต้นงวด + กระแสเงินสดสุทธิ = เงินสดปลายงวด (คำนวณอิสระเพื่อตรวจสอบ).
+
+export type CashFlowLine = { label: string; amount: number };
+
+export type CashFlowResult = {
+  from: string;
+  to: string;
+  operating: CashFlowLine[];
+  investing: CashFlowLine[];
+  financing: CashFlowLine[];
+  netOperating: number;
+  netInvesting: number;
+  netFinancing: number;
+  netChange: number;
+  openingCash: number;
+  closingCash: number;
+  reconciled: boolean;
+  cashAccounts: { code: string; name: string; opening: number; closing: number }[];
+  unmappedBanks: string[]; // ธนาคารที่มีเงินเคลื่อนไหวแต่ยังไม่ผูกผังบัญชี
+  unsetKeys: string[];
+};
+
+export async function getCashFlow(params: { from: string; to: string }): Promise<CashFlowResult> {
+  const { from, to } = params;
+  const fromDate = new Date(from);
+  const toDate = new Date(to);
+  toDate.setHours(23, 59, 59, 999);
+
+  const [{ entries, meta, unsetKeys }, config, banks] = await Promise.all([
+    buildLedger(),
+    prisma.accountingConfig.findMany(),
+    prisma.companyBankAccount.findMany({ select: { id: true, bankName: true, accountNo: true } }),
+  ]);
+
+  const bankLabelById = new Map(banks.map((b) => [b.id, `${b.bankName} ${b.accountNo}`]));
+  const cfgAcc = (key: string) => config.find((c) => c.key === key)?.accountId ?? null;
+  const cashAccountIds = new Set(
+    config.filter((c) => (c.key.startsWith("bank:") || c.key === "bank_default") && c.accountId).map((c) => c.accountId as string)
+  );
+  // บัญชีคุมยอดฝั่ง "ดำเนินงาน" (ลูกหนี้/เจ้าหนี้/ภาษี/ภาษีถูกหัก) — รายการเงินสดที่มีคู่บัญชีเหล่านี้ = ดำเนินงาน
+  const operatingCtrlIds = new Set(
+    ["ar", "wht_receivable", "ap", "wht_payable", "vat_output", "vat_input", "bank_fee", "receipt_variance"]
+      .map(cfgAcc)
+      .filter((x): x is string => !!x)
+  );
+
+  // จัดกลุ่มรายการตามเอกสาร เพื่อดูบัญชีคู่ของขาเงินสด
+  const docs = new Map<string, RawLedgerEntry[]>();
+  for (const e of entries) {
+    const k = `${e.sourceType}:${e.sourceId}`;
+    const arr = docs.get(k) ?? [];
+    arr.push(e);
+    docs.set(k, arr);
+  }
+
+  const RECEIPT_BOOK = AUTO_VOUCHER_BOOK_LABEL.RC;
+  const PAYMENT_BOOK = AUTO_VOUCHER_BOOK_LABEL.PAY;
+
+  const opBuckets = new Map<string, number>();
+  const invBuckets = new Map<string, number>();
+  const finBuckets = new Map<string, number>();
+  const bump = (m: Map<string, number>, label: string, amt: number) => m.set(label, round2((m.get(label) ?? 0) + amt));
+
+  let openingCash = 0;
+  let closingCash = 0;
+  const perAccount = new Map<string, { opening: number; closing: number }>();
+  const unmappedBanks = new Set<string>();
+
+  for (const [, legs] of docs) {
+    const cashLegs = legs.filter((l) => cashAccountIds.has(l.accountId));
+    if (cashLegs.length === 0) {
+      // ธนาคารที่ยังไม่ผูกผังบัญชี — ขาเงินสดจะตกใน __unset__:bank:<id>
+      for (const l of legs) {
+        if (isUnsetAccountId(l.accountId) && unsetKeyOf(l.accountId).startsWith("bank:")) {
+          const bid = unsetKeyOf(l.accountId).slice("bank:".length);
+          unmappedBanks.add(bankLabelById.get(bid) ?? bid);
+        }
+      }
+      continue;
+    }
+
+    for (const cl of cashLegs) {
+      const delta = round2(cl.debit - cl.credit); // + = เงินสดเข้า
+      const pa = perAccount.get(cl.accountId) ?? { opening: 0, closing: 0 };
+      if (cl.date < fromDate) pa.opening = round2(pa.opening + delta);
+      if (cl.date <= toDate) pa.closing = round2(pa.closing + delta);
+      perAccount.set(cl.accountId, pa);
+      if (cl.date < fromDate) openingCash = round2(openingCash + delta);
+      if (cl.date <= toDate) closingCash = round2(closingCash + delta);
+
+      if (cl.date < fromDate || cl.date > toDate) continue;
+
+      const bl = cl.bookLabel;
+      if (cl.sourceType === "RC" || bl === RECEIPT_BOOK) {
+        bump(opBuckets, "รับชำระจากลูกค้า", delta);
+        continue;
+      }
+      if (cl.sourceType === "PAY" || bl === PAYMENT_BOOK) {
+        bump(opBuckets, "จ่ายชำระเจ้าหนี้และค่าใช้จ่าย", delta);
+        continue;
+      }
+      // สมุดรายวันทั่วไป — ดูบัญชีคู่ (ขาที่ไม่ใช่เงินสด) ของเอกสารเดียวกัน
+      const counter = legs.filter((l) => !cashAccountIds.has(l.accountId));
+      const typeOf = (id: string) => meta.get(id)?.type ?? "UNKNOWN";
+      const isOperating = counter.some(
+        (l) => ["REVENUE", "EXPENSE"].includes(typeOf(l.accountId)) || operatingCtrlIds.has(l.accountId)
+      );
+      const isInvesting = counter.some((l) => typeOf(l.accountId) === "ASSET" && !operatingCtrlIds.has(l.accountId));
+      const isFinancing = counter.some(
+        (l) => ["LIABILITY", "EQUITY"].includes(typeOf(l.accountId)) && !operatingCtrlIds.has(l.accountId)
+      );
+
+      if (isOperating || (!isInvesting && !isFinancing)) bump(opBuckets, "รายการดำเนินงานอื่น (สมุดรายวัน)", delta);
+      else if (isInvesting) bump(invBuckets, "รายการลงทุน (สมุดรายวัน)", delta);
+      else bump(finBuckets, "รายการจัดหาเงิน (สมุดรายวัน)", delta);
+    }
+  }
+
+  const toLines = (m: Map<string, number>) =>
+    [...m.entries()].filter(([, v]) => Math.abs(v) >= 0.005).map(([label, amount]) => ({ label, amount: round2(amount) }));
+
+  const operating = toLines(opBuckets);
+  const investing = toLines(invBuckets);
+  const financing = toLines(finBuckets);
+  const netOperating = round2(operating.reduce((s, l) => s + l.amount, 0));
+  const netInvesting = round2(investing.reduce((s, l) => s + l.amount, 0));
+  const netFinancing = round2(financing.reduce((s, l) => s + l.amount, 0));
+  const netChange = round2(netOperating + netInvesting + netFinancing);
+
+  const cashAccounts = [...perAccount.entries()]
+    .map(([accId, v]) => {
+      const m = meta.get(accId);
+      return { code: m?.code ?? "?", name: m?.name ?? "(ไม่ทราบบัญชี)", opening: round2(v.opening), closing: round2(v.closing) };
+    })
+    .sort((a, b) => a.code.localeCompare(b.code, undefined, { numeric: true }));
+
+  return {
+    from,
+    to,
+    operating,
+    investing,
+    financing,
+    netOperating,
+    netInvesting,
+    netFinancing,
+    netChange,
+    openingCash,
+    closingCash,
+    reconciled: Math.abs(round2(openingCash + netChange - closingCash)) < 0.01,
+    cashAccounts,
+    unmappedBanks: [...unmappedBanks],
+    unsetKeys,
+  };
+}

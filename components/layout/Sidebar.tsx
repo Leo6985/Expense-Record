@@ -42,6 +42,8 @@ const menuGroups: MenuGroup[] = [
       { href: "/general-ledger", label: "บัญชีแยกประเภท", icon: "📚" },
       { href: "/trial-balance", label: "งบทดลอง", icon: "⚖️" },
       { href: "/reports/profit-loss", label: "งบกำไรขาดทุน", icon: "📈" },
+      { href: "/balance-sheet", label: "งบแสดงฐานะทางการเงิน", icon: "🏛️" },
+      { href: "/cash-flow", label: "งบกระแสเงินสด", icon: "💵" },
       { href: "/accounting-config", label: "ตั้งค่าผังบัญชีคุมยอด", icon: "⚙️" },
     ],
   },
