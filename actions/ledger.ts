@@ -17,6 +17,8 @@ import {
   LedgerSourceType,
   SOURCE_TYPE_LABEL,
   sourceHref,
+  AUTO_VOUCHER_BOOK_LABEL,
+  autoVoucherOrigin,
 } from "@/lib/ledger";
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -223,14 +225,18 @@ async function buildLedger(): Promise<BuiltLedger> {
   const receiptsPostedViaVoucher = postedViaVoucher("RC");
   const paymentsPostedViaVoucher = postedViaVoucher("PAY");
 
-  // 1) สมุดรายวันทั่วไป (เฉพาะอนุมัติแล้ว)
+  // 1) สมุดรายวันทั่วไป + ใบสำคัญที่สร้างอัตโนมัติจากสมุดรายวันย่อย (เฉพาะอนุมัติแล้ว)
   for (const v of jvs) {
+    const origin = v.sourceType && v.sourceId ? autoVoucherOrigin(v.sourceType, v.sourceId) : null;
     const doc = new DocEntries({
       date: v.voucherDate,
       sourceType: "JV",
       sourceId: v.id,
       sourceNumber: v.voucherNumber,
       description: v.description,
+      bookLabel: v.sourceType ? AUTO_VOUCHER_BOOK_LABEL[v.sourceType] : undefined,
+      originHref: origin?.href,
+      originLabel: origin?.label,
     });
     for (const l of v.lines) {
       doc.debit(l.accountId, "imbalance", l.debit);
@@ -390,10 +396,12 @@ export async function getLedgerAccounts() {
 export type GeneralLedgerEntry = {
   date: string;
   sourceType: LedgerSourceType;
-  sourceTypeLabel: string;
+  sourceTypeLabel: string; // ป้ายสมุดรายวัน — เป็นชื่อสมุดรายวันย่อยถ้ารายการมาจากใบสำคัญที่สร้างอัตโนมัติ
   sourceNumber: string;
   description: string;
   href: string;
+  originLabel?: string; // ป้าย + ลิงก์เอกสารต้นทาง (ใบกำกับภาษีขาย/ใบตั้งหนี้/ใบรับชำระ/การจ่ายเงิน)
+  originHref?: string;
   debit: number;
   credit: number;
   balance: number;
@@ -466,10 +474,12 @@ export async function getGeneralLedger(params: {
       return {
         date: e.date.toISOString(),
         sourceType: e.sourceType,
-        sourceTypeLabel: SOURCE_TYPE_LABEL[e.sourceType],
+        sourceTypeLabel: e.bookLabel ?? SOURCE_TYPE_LABEL[e.sourceType],
         sourceNumber: e.sourceNumber,
         description: e.description,
         href: sourceHref(e.sourceType, e.sourceId),
+        originLabel: e.originLabel,
+        originHref: e.originHref,
         debit: e.debit,
         credit: e.credit,
         balance: running,

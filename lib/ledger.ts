@@ -67,7 +67,35 @@ export type RawLedgerEntry = {
   sourceId: string;
   sourceNumber: string;
   description: string;
+  // ป้ายชื่อ "สมุดรายวัน" ที่รายการนี้ผ่าน — ใช้กับใบสำคัญที่สร้างอัตโนมัติจากสมุดรายวันย่อย
+  // (ขาย/ซื้อ/รับเงิน/จ่ายเงิน). ถ้าไม่มีให้ใช้ SOURCE_TYPE_LABEL[sourceType] แทน
+  bookLabel?: string;
+  // ลิงก์ + ป้ายของ "เอกสารต้นทาง" (นอกเหนือจากลิงก์ใบสำคัญ) เช่น ใบกำกับภาษีขาย/ใบตั้งหนี้
+  originHref?: string;
+  originLabel?: string;
 };
+
+// ชื่อสมุดรายวันย่อยตาม sourceType ของ JournalVoucher ที่สร้างอัตโนมัติ
+export const AUTO_VOUCHER_BOOK_LABEL: Record<string, string> = {
+  SI: "สมุดรายวันขาย",
+  AP: "สมุดรายวันซื้อ",
+  RC: "สมุดรายวันรับเงิน",
+  PAY: "สมุดรายวันจ่ายเงิน",
+};
+
+// เอกสารต้นทางของใบสำคัญที่สร้างอัตโนมัติ — ลิงก์ + ป้าย (null ถ้าไม่รู้จัก sourceType)
+export function autoVoucherOrigin(
+  sourceType: string,
+  sourceId: string
+): { label: string; href: string } | null {
+  switch (sourceType) {
+    case "SI":  return { label: "ใบกำกับภาษีขาย", href: `/sales-invoices/${sourceId}` };
+    case "AP":  return { label: "ใบตั้งหนี้", href: `/accounts-payable/${sourceId}` };
+    case "RC":  return { label: "ใบรับชำระ", href: `/receipts/${sourceId}` };
+    case "PAY": return { label: "การจ่ายเงิน", href: `/payments/${sourceId}` };
+    default:    return null;
+  }
+}
 
 export const UNSET_PREFIX = "__unset__:";
 export const isUnsetAccountId = (id: string) => id.startsWith(UNSET_PREFIX);
@@ -85,6 +113,9 @@ export class DocEntries {
       sourceId: string;
       sourceNumber: string;
       description: string;
+      bookLabel?: string;
+      originHref?: string;
+      originLabel?: string;
     }
   ) {}
 
@@ -121,6 +152,9 @@ export class DocEntries {
       sourceId: this.base.sourceId,
       sourceNumber: this.base.sourceNumber,
       description: this.base.description,
+      bookLabel: this.base.bookLabel,
+      originHref: this.base.originHref,
+      originLabel: this.base.originLabel,
     }));
   }
 }

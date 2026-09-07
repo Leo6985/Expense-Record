@@ -36,14 +36,14 @@ export default function GeneralLedgerPage() {
 
   function handleDownloadCSV() {
     if (!result) return;
-    const headers = ["รหัสบัญชี", "ชื่อบัญชี", "วันที่", "ประเภทเอกสาร", "เลขที่", "รายละเอียด", "เดบิต", "เครดิต", "คงเหลือ"];
+    const headers = ["รหัสบัญชี", "ชื่อบัญชี", "วันที่", "สมุดรายวัน", "เลขที่", "เอกสารต้นทาง", "รายละเอียด", "เดบิต", "เครดิต", "คงเหลือ"];
     const rows: (string | number)[][] = [];
     for (const b of result.blocks) {
-      rows.push([b.code, b.name, "", "", "", "ยอดยกมา", "", "", b.opening]);
+      rows.push([b.code, b.name, "", "", "", "", "ยอดยกมา", "", "", b.opening]);
       for (const e of b.entries) {
-        rows.push([b.code, b.name, formatDate(e.date), e.sourceTypeLabel, e.sourceNumber, e.description, e.debit || "", e.credit || "", e.balance]);
+        rows.push([b.code, b.name, formatDate(e.date), e.sourceTypeLabel, e.sourceNumber, e.originLabel ?? "", e.description, e.debit || "", e.credit || "", e.balance]);
       }
-      rows.push([b.code, b.name, "", "", "", "รวม/ยกไป", b.totalDebit, b.totalCredit, b.closing]);
+      rows.push([b.code, b.name, "", "", "", "", "รวม/ยกไป", b.totalDebit, b.totalCredit, b.closing]);
     }
     downloadCSV(`general_ledger_${from}_${to}.csv`, headers, rows);
   }
@@ -54,7 +54,8 @@ export default function GeneralLedgerPage() {
         <div>
           <h1 className="text-2xl font-bold text-gray-900">บัญชีแยกประเภท</h1>
           <p className="text-gray-500 text-sm mt-0.5">
-            รายการเดบิต-เครดิตรายบัญชี สังเคราะห์จากสมุดรายวันทั่วไป + เอกสารขาย/ซื้อ/รับ/จ่าย
+            รายการเดบิต-เครดิตรายบัญชี จากสมุดรายวันทั่วไป/ขาย/ซื้อ/รับเงิน/จ่ายเงิน (ใบสำคัญที่อนุมัติแล้ว)
+            และรายการที่ยังไม่ได้ออกใบสำคัญจะสังเคราะห์จากเอกสารต้นทางให้อัตโนมัติ
           </p>
         </div>
         <div className="flex items-center gap-3">
@@ -178,6 +179,14 @@ export default function GeneralLedgerPage() {
                                 {e.sourceNumber}
                               </Link>
                               <span className="text-gray-400 text-xs ml-1">{e.sourceTypeLabel}</span>
+                              {e.originHref && e.originLabel && (
+                                <>
+                                  <span className="text-gray-300 text-xs mx-1">·</span>
+                                  <Link href={e.originHref} className="text-blue-600 hover:underline text-xs">
+                                    {e.originLabel}
+                                  </Link>
+                                </>
+                              )}
                             </td>
                             <td className="px-4 py-2 text-gray-700">{e.description}</td>
                             <td className="px-4 py-2 text-right text-gray-800">{amt(e.debit)}</td>
