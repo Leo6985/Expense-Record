@@ -1,4 +1,5 @@
 import { prisma } from "./prisma";
+import { bankConfigKey } from "./ledger";
 import {
   journalVouchersTable,
   journalVoucherLinesTable,
@@ -19,6 +20,19 @@ export type GeneratedLine = {
   debit: number;
   credit: number;
 };
+
+/**
+ * ตัวช่วยแปลง key ของผังบัญชีคุมยอด (AccountingConfig) เป็น accountId — พร้อม `bank()` ที่ไล่จาก
+ * บัญชีธนาคารเฉพาะราย (bank:<companyBankAccountId>) ไปยัง bank_default เหมือน buildLedger.
+ */
+export function configResolver(config: { key: string; accountId: string | null }[]) {
+  const cfg = new Map(config.map((c) => [c.key, c.accountId]));
+  return {
+    get: (key: string): string | null => cfg.get(key) || null,
+    bank: (companyBankAccountId: string): string | null =>
+      cfg.get(bankConfigKey(companyBankAccountId)) || cfg.get("bank_default") || null,
+  };
+}
 
 /**
  * ตัวสร้างเลขที่ใบสำคัญต่อ prefix เดือน (JV + ปี ค.ศ. + เดือน) — seed จากเลขล่าสุดในฐานข้อมูล

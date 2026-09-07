@@ -312,9 +312,25 @@ export async function unapproveReceipt(id: string) {
   revalidatePath("/sales-invoices");
 }
 
+// ห้ามยกเลิก/ลบใบรับชำระที่ยังมีใบสำคัญ "สมุดรายวันรับเงิน" ผูกอยู่ — ให้ลบใบสำคัญนั้นก่อน
+async function assertNoReceiptJournalVoucher(receiptId: string, verb: string) {
+  const voucher = await prisma.journalVoucher.findFirst({
+    where: { sourceType: "RC", sourceId: receiptId },
+    select: { voucherNumber: true, status: true },
+  });
+  if (voucher) {
+    const approved = voucher.status === "APPROVED" ? " (ยกเลิกอนุมัติก่อน)" : "";
+    throw new Error(
+      `ไม่สามารถ${verb}ได้ เนื่องจากมีใบสำคัญสมุดรายวันรับเงิน ${voucher.voucherNumber} ผูกอยู่ กรุณาลบใบสำคัญนั้นก่อน${approved}`
+    );
+  }
+}
+
 export async function cancelReceipt(id: string) {
   const existing = await prisma.receipt.findUnique({ where: { id }, include: { items: true } });
   if (!existing) return;
+
+  await assertNoReceiptJournalVoucher(id, "ยกเลิก");
 
   const invoiceIds = existing.items.map((item) => item.invoiceId);
 
@@ -339,6 +355,8 @@ export async function deleteReceipt(id: string) {
   const existing = await prisma.receipt.findUnique({ where: { id }, include: { items: true } });
   if (!existing) return;
   if (existing.status !== "DRAFT") throw new Error("ลบได้เฉพาะรายการที่ยังไม่อนุมัติเท่านั้น");
+
+  await assertNoReceiptJournalVoucher(id, "ลบ");
 
   const invoiceIds = existing.items.map((item) => item.invoiceId);
 

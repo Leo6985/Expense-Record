@@ -214,12 +214,14 @@ async function buildLedger(): Promise<BuiltLedger> {
 
   // เอกสารต้นทางที่มีใบสำคัญอนุมัติแล้ว (สมุดรายวันขาย/ซื้อ) — ข้ามการสังเคราะห์คู่บัญชีในข้อ 2/6
   // เพื่อไม่ให้นับซ้ำ (คู่บัญชีเข้าบัญชีแยกประเภทผ่านใบสำคัญในข้อ 1 แทน)
-  const invoicesPostedViaVoucher = new Set(
-    jvs.filter((v) => v.sourceType === "SI" && v.sourceId).map((v) => v.sourceId as string)
-  );
-  const apsPostedViaVoucher = new Set(
-    jvs.filter((v) => v.sourceType === "AP" && v.sourceId).map((v) => v.sourceId as string)
-  );
+  const postedViaVoucher = (sourceType: string) =>
+    new Set(
+      jvs.filter((v) => v.sourceType === sourceType && v.sourceId).map((v) => v.sourceId as string)
+    );
+  const invoicesPostedViaVoucher = postedViaVoucher("SI");
+  const apsPostedViaVoucher = postedViaVoucher("AP");
+  const receiptsPostedViaVoucher = postedViaVoucher("RC");
+  const paymentsPostedViaVoucher = postedViaVoucher("PAY");
 
   // 1) สมุดรายวันทั่วไป (เฉพาะอนุมัติแล้ว)
   for (const v of jvs) {
@@ -275,7 +277,9 @@ async function buildLedger(): Promise<BuiltLedger> {
   }
 
   // 4) รับชำระ (Receipt) — ผลต่างเงินขาด/เกินดันลงบัญชีผลต่างรับชำระ
+  //    (ยกเว้นใบที่โพสต์ผ่านใบสำคัญสมุดรายวันรับเงินที่อนุมัติแล้ว)
   for (const r of receipts) {
+    if (receiptsPostedViaVoucher.has(r.id)) continue;
     const doc = new DocEntries({
       date: r.receiptDate,
       sourceType: "RC",
@@ -291,8 +295,9 @@ async function buildLedger(): Promise<BuiltLedger> {
     out.push(...doc.balance(resolve("receipt_variance"), "receipt_variance"));
   }
 
-  // 5) จ่ายเงิน (Payment ผ่าน PaymentPrep)
+  // 5) จ่ายเงิน (Payment ผ่าน PaymentPrep) — ยกเว้นใบที่โพสต์ผ่านใบสำคัญสมุดรายวันจ่ายเงินที่อนุมัติแล้ว
   for (const p of payments) {
+    if (paymentsPostedViaVoucher.has(p.id)) continue;
     const wht = round2(p.prep.totalWithholdingTax ?? 0);
     const doc = new DocEntries({
       date: p.paymentDate,

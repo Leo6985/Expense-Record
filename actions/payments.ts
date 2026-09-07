@@ -195,6 +195,18 @@ export async function deletePayment(id: string) {
   });
   if (!payment) throw new Error("ไม่พบรายการชำระเงิน");
 
+  // ห้ามลบการจ่ายเงินที่ยังมีใบสำคัญ "สมุดรายวันจ่ายเงิน" ผูกอยู่ — ให้ลบใบสำคัญนั้นก่อน
+  const voucher = await prisma.journalVoucher.findFirst({
+    where: { sourceType: "PAY", sourceId: id },
+    select: { voucherNumber: true, status: true },
+  });
+  if (voucher) {
+    const approved = voucher.status === "APPROVED" ? " (ยกเลิกอนุมัติก่อน)" : "";
+    throw new Error(
+      `ไม่สามารถลบได้ เนื่องจากมีใบสำคัญสมุดรายวันจ่ายเงิน ${voucher.voucherNumber} ผูกอยู่ กรุณาลบใบสำคัญนั้นก่อน${approved}`
+    );
+  }
+
   const apIds = payment.prep.items.map((item) => item.apId);
 
   const prep = await prisma.$transaction(async (tx) => {

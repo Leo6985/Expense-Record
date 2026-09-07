@@ -37,6 +37,8 @@ const menuGroups: MenuGroup[] = [
       { href: "/journal-vouchers", label: "สมุดรายวันทั่วไป", icon: "📓" },
       { href: "/sales-journal", label: "สมุดรายวันขาย", icon: "📗" },
       { href: "/purchase-journal", label: "สมุดรายวันซื้อ", icon: "📕" },
+      { href: "/receipts-journal", label: "สมุดรายวันรับเงิน", icon: "📗" },
+      { href: "/payments-journal", label: "สมุดรายวันจ่ายเงิน", icon: "📕" },
       { href: "/general-ledger", label: "บัญชีแยกประเภท", icon: "📚" },
       { href: "/trial-balance", label: "งบทดลอง", icon: "⚖️" },
       { href: "/accounting-config", label: "ตั้งค่าผังบัญชีคุมยอด", icon: "⚙️" },
