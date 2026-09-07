@@ -97,14 +97,12 @@ export default function ProfitLossPage() {
   return (
     <div>
       <div className="flex items-center justify-between mb-6">
-        <div className="flex items-center gap-3">
-          <Link href="/reports" className="text-gray-400 hover:text-gray-600">← กลับ</Link>
-          <div>
-            <h1 className="text-2xl font-bold text-gray-900">งบกำไรขาดทุน</h1>
-            <p className="text-gray-500 text-sm mt-0.5">
-              รายได้และค่าใช้จ่ายดึงจากบัญชีแยกประเภทชุดเดียวกับงบทดลอง จึงกระทบยอดกันได้
-            </p>
-          </div>
+        <div>
+          <h1 className="text-2xl font-bold text-gray-900">งบกำไรขาดทุน</h1>
+          <p className="text-gray-500 text-sm mt-0.5">
+            รายได้และค่าใช้จ่ายดึงจากบัญชีแยกประเภทชุดเดียวกับ
+            <Link href="/trial-balance" className="text-blue-700 hover:underline">งบทดลอง</Link> จึงกระทบยอดกันได้
+          </p>
         </div>
         {stmt && (
           <a
