@@ -44,13 +44,14 @@ model Vendor {
 }
 
 model ChartOfAccount {
-  id        String   @id @default(cuid())
-  code      String   @unique
-  name      String
-  type      String   @default("EXPENSE")
-  isActive  Boolean  @default(true)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id             String   @id @default(cuid())
+  code           String   @unique
+  name           String
+  type           String   @default("EXPENSE")
+  isActive       Boolean  @default(true)
+  openingBalance Float    @default(0)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
 
   products               Product[]
   accountsPayable        AccountsPayable[]

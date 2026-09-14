@@ -3,6 +3,7 @@
 import { prisma } from "@/lib/prisma";
 import { chartOfAccountsTable, ChartOfAccountRecord } from "@/lib/sheets-tables";
 import { revalidatePath } from "next/cache";
+import { auth } from "@/auth";
 
 /**
  * Postgres remains authoritative (Product.accountId still holds a real FK to
@@ -16,6 +17,7 @@ async function syncAccountToSheet(account: {
   name: string;
   type: string;
   isActive: boolean;
+  openingBalance: number;
   createdAt: Date;
   updatedAt: Date;
 }) {
@@ -81,6 +83,27 @@ export async function updateChartOfAccount(
 
   revalidatePath("/chart-of-accounts");
   revalidatePath(`/chart-of-accounts/${id}`);
+  return account;
+}
+
+// ยอดยกมา (opening balance) ของบัญชีแต่ละบัญชี — คีย์ในหน้าบัญชีแยกประเภทเพื่อใช้แสดงเป็นยอด
+// "ยอดยกมา" เริ่มต้นของบัญชีนั้นก่อนรายการแรกในระบบ ค่าที่คีย์เป็นยอดสุทธิแบบเดบิต (บวก = เดบิต,
+// ลบ = เครดิต) ตามธรรมเนียมเดียวกับยอดคงเหลือที่คำนวณใน buildLedger(). ใช้เฉพาะแสดงผลในบัญชี
+// แยกประเภทเท่านั้น — ไม่ถูกรวมเข้า buildLedger() จึงไม่กระทบงบทดลอง/งบการเงินอื่น (เหมือน
+// openingBalance ของบัญชีธนาคารบริษัทที่ก็แยกออกจากบัญชีแยกประเภทเช่นกัน)
+export async function setAccountOpeningBalance(id: string, amount: number) {
+  const session = await auth();
+  const u = session?.user as { level?: string; role?: string } | undefined;
+  if (u?.level !== "MANAGER" && u?.role !== "OWNER")
+    throw new Error("เฉพาะผู้จัดการหรือเจ้าของเท่านั้นที่แก้ไขยอดยกมาได้");
+
+  const account = await prisma.chartOfAccount.update({
+    where: { id },
+    data: { openingBalance: Math.round(amount * 100) / 100 },
+  });
+  await syncAccountToSheet(account);
+
+  revalidatePath("/general-ledger");
   return account;
 }
 

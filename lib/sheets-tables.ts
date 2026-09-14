@@ -48,6 +48,7 @@ export type ChartOfAccountRecord = {
   name: string;
   type: string;
   isActive: boolean;
+  openingBalance: number;
   createdAt: Date;
   updatedAt: Date;
 };
@@ -60,6 +61,7 @@ export const CHART_OF_ACCOUNT_COLUMNS: ColumnDef[] = [
   { key: "name", type: "string" },
   { key: "type", type: "string" },
   { key: "isActive", type: "boolean" },
+  { key: "openingBalance", type: "number" },
   { key: "createdAt", type: "date" },
   { key: "updatedAt", type: "date" },
 ];

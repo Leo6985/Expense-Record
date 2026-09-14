@@ -2,6 +2,7 @@ import { getReceipts } from "@/actions/receipts";
 import Link from "next/link";
 import { formatDate, formatCurrency } from "@/lib/utils";
 import DeleteReceiptButton from "./DeleteReceiptButton";
+import ReceiptsCsvImport from "./ReceiptsCsvImport";
 
 const statusConfig: Record<string, { label: string; color: string }> = {
   DRAFT: { label: "ร่าง", color: "bg-gray-100 text-gray-700" },
@@ -20,6 +21,7 @@ export default async function ReceiptsPage() {
           <a href="/api/export/receipts" className="text-sm text-green-700 hover:underline flex items-center gap-1 font-medium">
             ⬇ ดาวน์โหลด (.xlsx)
           </a>
+          <ReceiptsCsvImport />
           <Link
             href="/receipts/new"
             className="bg-blue-700 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-blue-800 transition-colors"

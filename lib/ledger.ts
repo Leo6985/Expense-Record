@@ -15,6 +15,7 @@ export type ConfigKey =
   | "vat_output"
   | "ap"
   | "vat_input"
+  | "vat_input_deferred"
   | "wht_receivable"
   | "wht_payable"
   | "bank_fee"
@@ -32,6 +33,7 @@ export const CONFIG_KEY_META: Record<
   vat_output:       { label: "ภาษีขาย (ภาษีมูลค่าเพิ่ม)",         hint: "VAT ฝั่งขาย",                                  suggestType: "LIABILITY" },
   ap:               { label: "เจ้าหนี้การค้า",                    hint: "ใช้ตอนตั้งหนี้ (AP) / จ่ายเงิน",               suggestType: "LIABILITY" },
   vat_input:        { label: "ภาษีซื้อ (ภาษีมูลค่าเพิ่ม)",        hint: "VAT ฝั่งซื้อ จากการตั้งหนี้",                  suggestType: "ASSET" },
+  vat_input_deferred: { label: "ภาษีซื้อไม่ถึงกำหนด",             hint: "ภาษีซื้อที่ยังไม่ถึงกำหนดใช้เครดิตภาษี (พักไว้ก่อนโอนเข้าภาษีซื้อ)", suggestType: "ASSET" },
   wht_receivable:   { label: "ภาษีเงินได้ถูกหัก ณ ที่จ่าย",       hint: "ยอดที่ลูกค้าหักตอนรับชำระ (สินทรัพย์)",        suggestType: "ASSET" },
   wht_payable:      { label: "ภาษีหัก ณ ที่จ่าย ค้างนำส่ง",       hint: "ยอดที่บริษัทหักผู้ขายตอนจ่ายเงิน (หนี้สิน)",  suggestType: "LIABILITY" },
   bank_fee:         { label: "ค่าธรรมเนียมธนาคาร",                hint: "ค่าธรรมเนียมจากเอกสารรับชำระ",                 suggestType: "EXPENSE" },

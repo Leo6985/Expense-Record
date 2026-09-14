@@ -6,6 +6,7 @@ import { auth } from "@/auth";
 import { syncInvoiceStatus, syncInvoicesToSheetById } from "./sales-invoices";
 import { getEffectiveInvoiceTotal } from "@/lib/sales-invoice-reconciliation";
 import { receiptsTable, receiptItemsTable, ReceiptRecord, ReceiptItemRecord } from "@/lib/sheets-tables";
+import { parseImportDate } from "@/lib/import-dates";
 
 const AMOUNT_TOLERANCE = 0.01;
 
@@ -375,6 +376,117 @@ export async function deleteReceipt(id: string) {
 
   revalidatePath("/receipts");
   revalidatePath("/sales-invoices");
+}
+
+type ImportReceiptRow = {
+  receiptDate: string;
+  recordedDate?: string;
+  invoiceNumber: string;
+  companyBankAccountNo: string;
+  paymentMethod?: string;
+  referenceNumber?: string;
+  amount?: number;
+  feeAmount?: number;
+  withholdingTaxAmount?: number;
+  withholdingTaxCertNumber?: string;
+  actualReceivedAmount?: number;
+  notes?: string;
+};
+
+/**
+ * Bulk-imports receipts (การรับชำระ/ตัดชำระ) — one row settles one sales invoice, which covers
+ * the common case (a customer pays one invoice in one transfer). A receipt that settles several
+ * invoices at once still has to go through the manual form (ReceiptForm) since there's no
+ * grouping key here to merge multiple rows into a single receipt.
+ *
+ * Reuses createReceipt() for the actual write (transaction + Sheet sync + status reconciliation)
+ * instead of duplicating that logic — each row becomes one real receipt, created sequentially
+ * (not Promise.all) so getNextReceiptNumber's per-prefix DB lookup doesn't race across rows, and
+ * so each row's "remaining balance" check sees prior rows in the same batch that already
+ * consumed part of the same invoice.
+ */
+export async function importReceiptsCSV(rows: ImportReceiptRow[]) {
+  let created = 0;
+  let skipped = 0;
+  const errors: string[] = [];
+
+  for (const row of rows) {
+    if (!row.receiptDate || !row.invoiceNumber || !row.companyBankAccountNo) {
+      errors.push(`แถว "${row.invoiceNumber || "?"}" : ต้องมีวันที่รับชำระ เลขที่ใบกำกับภาษีขาย และเลขบัญชีธนาคาร`);
+      continue;
+    }
+    const receiptDate = parseImportDate(row.receiptDate);
+    if (!receiptDate) {
+      errors.push(`ใบกำกับ ${row.invoiceNumber}: วันที่รับชำระไม่ถูกต้อง ("${row.receiptDate}")`);
+      continue;
+    }
+    const recordedDate = row.recordedDate ? parseImportDate(row.recordedDate) : receiptDate;
+    if (!recordedDate) {
+      errors.push(`ใบกำกับ ${row.invoiceNumber}: วันที่บันทึกไม่ถูกต้อง ("${row.recordedDate}")`);
+      continue;
+    }
+
+    try {
+      const bankAccount = await prisma.companyBankAccount.findFirst({
+        where: { accountNo: row.companyBankAccountNo },
+      });
+      if (!bankAccount) {
+        errors.push(`ใบกำกับ ${row.invoiceNumber}: ไม่พบบัญชีธนาคารเลขที่ "${row.companyBankAccountNo}"`);
+        continue;
+      }
+
+      const invoice = await prisma.salesInvoice.findUnique({
+        where: { invoiceNumber: row.invoiceNumber },
+        include: { receiptItems: { include: { receipt: true } }, debitCreditNotes: true },
+      });
+      if (!invoice) {
+        errors.push(`ไม่พบใบกำกับภาษีขายเลขที่ "${row.invoiceNumber}"`);
+        continue;
+      }
+      if (invoice.status === "CANCELLED") {
+        errors.push(`ใบกำกับ ${row.invoiceNumber}: ถูกยกเลิกแล้ว ข้าม`);
+        skipped++;
+        continue;
+      }
+
+      const consumed = invoice.receiptItems
+        .filter((item) => item.receipt.status !== "CANCELLED")
+        .reduce((s, item) => s + item.amount, 0);
+      const remaining = Math.round((getEffectiveInvoiceTotal(invoice) - consumed) * 100) / 100;
+      const amount = row.amount !== undefined ? row.amount : remaining;
+      if (amount <= 0) {
+        errors.push(`ใบกำกับ ${row.invoiceNumber}: ตัดชำระครบแล้ว ไม่มียอดคงเหลือให้ตัดชำระ ข้าม`);
+        skipped++;
+        continue;
+      }
+
+      const feeAmount = row.feeAmount ?? 0;
+      const withholdingTaxAmount = row.withholdingTaxAmount ?? 0;
+      const actualReceivedAmount =
+        row.actualReceivedAmount !== undefined
+          ? row.actualReceivedAmount
+          : Math.round((amount - feeAmount - withholdingTaxAmount) * 100) / 100;
+
+      await createReceipt({
+        receiptDate: receiptDate.toISOString().slice(0, 10),
+        recordedDate: recordedDate.toISOString().slice(0, 10),
+        companyBankAccountId: bankAccount.id,
+        paymentMethod: row.paymentMethod || "โอนเงิน",
+        referenceNumber: row.referenceNumber || undefined,
+        feeAmount: feeAmount || undefined,
+        withholdingTaxAmount: withholdingTaxAmount || undefined,
+        withholdingTaxCertNumber: row.withholdingTaxCertNumber || undefined,
+        actualReceivedAmount,
+        notes: row.notes || undefined,
+        items: [{ invoiceId: invoice.id, amount }],
+      });
+      created++;
+    } catch (err) {
+      errors.push(`ใบกำกับ ${row.invoiceNumber}: บันทึกไม่สำเร็จ${err instanceof Error ? ` — ${err.message}` : ""}`);
+    }
+  }
+
+  return { created, skipped, errors };
 }
 
 // Non-cancelled receipts deposited into one company bank account, for the "บัญชีบริษัท"

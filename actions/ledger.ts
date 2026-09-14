@@ -99,7 +99,7 @@ export async function saveAccountingConfig(entries: { key: string; accountId: st
 // Posting engine — สังเคราะห์รายการเดบิต-เครดิตจากเอกสารต้นทาง
 // ─────────────────────────────────────────────────────────────────────────────
 
-type AccountMeta = { code: string; name: string; type: string; sortKey: string };
+type AccountMeta = { code: string; name: string; type: string; sortKey: string; openingBalance: number };
 
 type BuiltLedger = {
   entries: RawLedgerEntry[];
@@ -110,7 +110,7 @@ type BuiltLedger = {
 async function buildLedger(): Promise<BuiltLedger> {
   const [config, chart, banks, jvs, invoices, notes, receipts, payments, aps] = await Promise.all([
     prisma.accountingConfig.findMany(),
-    prisma.chartOfAccount.findMany({ select: { id: true, code: true, name: true, type: true } }),
+    prisma.chartOfAccount.findMany({ select: { id: true, code: true, name: true, type: true, openingBalance: true } }),
     prisma.companyBankAccount.findMany({ select: { id: true, bankName: true, accountNo: true } }),
     prisma.journalVoucher.findMany({
       where: { status: "APPROVED" },
@@ -347,7 +347,7 @@ async function buildLedger(): Promise<BuiltLedger> {
 
   // ─── ผูกชื่อบัญชี + เก็บ key ที่ยังไม่ได้ตั้งค่า ───
   const chartMeta = new Map(
-    chart.map((a) => [a.id, { code: a.code, name: a.name, type: a.type, sortKey: a.code }])
+    chart.map((a) => [a.id, { code: a.code, name: a.name, type: a.type, sortKey: a.code, openingBalance: a.openingBalance }])
   );
   const meta = new Map<string, AccountMeta>(chartMeta);
   const unsetKeys = new Set<string>();
@@ -370,11 +370,12 @@ async function buildLedger(): Promise<BuiltLedger> {
           name: `(ยังไม่ได้ตั้งค่า) ${label}`,
           type: "UNSET",
           sortKey: "zzzz~" + key,
+          openingBalance: 0,
         });
       }
     } else {
       // accountId ที่หาไม่เจอในผังบัญชี (ผังบัญชีถูกลบ ฯลฯ) — กันพัง
-      meta.set(e.accountId, { code: "?", name: "(บัญชีถูกลบ)", type: "UNKNOWN", sortKey: "zzzz~~" });
+      meta.set(e.accountId, { code: "?", name: "(บัญชีถูกลบ)", type: "UNKNOWN", sortKey: "zzzz~~", openingBalance: 0 });
     }
   }
 
@@ -413,6 +414,7 @@ export type GeneralLedgerBlock = {
   name: string;
   type: string;
   opening: number;
+  openingManual: number; // ยอดยกมาที่คีย์ไว้เอง (ส่วนหนึ่งของ opening) — ใช้เติมค่าเริ่มต้นในฟอร์มแก้ไข
   totalDebit: number;
   totalCredit: number;
   closing: number;
@@ -460,12 +462,15 @@ export async function getGeneralLedger(params: {
 
   const blocks: GeneralLedgerBlock[] = [];
   for (const [accId, list] of byAccount) {
-    const m = meta.get(accId) ?? { code: "?", name: "(ไม่ทราบบัญชี)", type: "UNKNOWN", sortKey: "zzzz" };
+    const m = meta.get(accId) ?? { code: "?", name: "(ไม่ทราบบัญชี)", type: "UNKNOWN", sortKey: "zzzz", openingBalance: 0 };
 
+    // ยอดยกมา = ยอดที่คีย์ไว้เอง (ก่อนเริ่มใช้ระบบ) + รายการในบัญชีแยกประเภทก่อน fromDate
+    const openingManual = round2(m.openingBalance);
     const opening = round2(
-      list
-        .filter((e) => e.date < fromDate)
-        .reduce((s, e) => s + e.debit - e.credit, 0)
+      openingManual +
+        list
+          .filter((e) => e.date < fromDate)
+          .reduce((s, e) => s + e.debit - e.credit, 0)
     );
 
     const period = list
@@ -504,6 +509,7 @@ export async function getGeneralLedger(params: {
       name: m.name,
       type: m.type,
       opening,
+      openingManual,
       totalDebit,
       totalCredit,
       closing: round2(opening + totalDebit - totalCredit),

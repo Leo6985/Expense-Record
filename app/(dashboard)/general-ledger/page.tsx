@@ -7,13 +7,97 @@ import {
   getGeneralLedger,
   GeneralLedgerResult,
 } from "@/actions/ledger";
+import { setAccountOpeningBalance } from "@/actions/chart-of-accounts";
+import { round2 } from "@/lib/ledger";
 import { formatDate, formatCurrency } from "@/lib/utils";
 import { downloadCSV } from "@/lib/csv";
 import PageLoading from "@/components/PageLoading";
+import AccountCombobox from "@/components/AccountCombobox";
 
 type Account = Awaited<ReturnType<typeof getLedgerAccounts>>[number];
 
 const amt = (n: number) => (n === 0 ? "-" : `฿${formatCurrency(n)}`);
+
+function OpeningBalanceEditor({
+  accountId,
+  currentValue,
+  onSaved,
+}: {
+  accountId: string;
+  currentValue: number;
+  onSaved: (newValue: number) => void;
+}) {
+  const [editing, setEditing] = useState(false);
+  const [value, setValue] = useState(String(currentValue));
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+
+  async function handleSave() {
+    setSaving(true);
+    setError("");
+    try {
+      const amount = parseFloat(value) || 0;
+      await setAccountOpeningBalance(accountId, amount);
+      onSaved(amount);
+      setEditing(false);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "บันทึกไม่สำเร็จ");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  if (!editing) {
+    return (
+      <div className="flex items-center gap-1.5 text-xs">
+        {currentValue !== 0 && (
+          <span className="text-gray-500">
+            ยอดยกมาที่คีย์เอง <span className="font-medium text-gray-700">฿{formatCurrency(currentValue)}</span>
+          </span>
+        )}
+        <button
+          type="button"
+          onClick={() => {
+            setValue(String(currentValue));
+            setEditing(true);
+          }}
+          className="text-blue-600 hover:underline"
+        >
+          {currentValue !== 0 ? "แก้ไข" : "คีย์ยอดยกมา"}
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex items-center gap-1.5">
+      <input
+        type="number"
+        step="0.01"
+        value={value}
+        onChange={(e) => setValue(e.target.value)}
+        autoFocus
+        className="w-28 border border-gray-300 rounded px-2 py-1 text-xs text-right focus:outline-none focus:ring-1 focus:ring-blue-400"
+      />
+      <button
+        type="button"
+        onClick={handleSave}
+        disabled={saving}
+        className="text-xs bg-blue-600 text-white px-2 py-1 rounded hover:bg-blue-700 disabled:opacity-50"
+      >
+        {saving ? "..." : "บันทึก"}
+      </button>
+      <button
+        type="button"
+        onClick={() => setEditing(false)}
+        className="text-xs text-gray-500 hover:underline"
+      >
+        ยกเลิก
+      </button>
+      {error && <span className="text-xs text-red-600">{error}</span>}
+    </div>
+  );
+}
 
 export default function GeneralLedgerPage() {
   const thisMonth = new Date().toISOString().slice(0, 7);
@@ -71,18 +155,12 @@ export default function GeneralLedgerPage() {
       <div className="bg-white rounded-xl border border-gray-200 p-4 mb-5 flex items-end gap-4 flex-wrap">
         <div className="flex-1 min-w-56">
           <label className="block text-xs font-medium text-gray-600 mb-1">บัญชี</label>
-          <select
-            value={accountId}
-            onChange={(e) => setAccountId(e.target.value)}
-            className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-          >
-            <option value="ALL">ทุกบัญชี</option>
-            {accounts.map((a) => (
-              <option key={a.id} value={a.id}>
-                {a.code} — {a.name}
-              </option>
-            ))}
-          </select>
+          <AccountCombobox
+            accounts={accounts}
+            accountId={accountId}
+            onSelect={setAccountId}
+            allLabel="ทุกบัญชี"
+          />
         </div>
         <div>
           <label className="block text-xs font-medium text-gray-600 mb-1">ตั้งแต่วันที่</label>
@@ -141,13 +219,39 @@ export default function GeneralLedgerPage() {
             <div className="space-y-5">
               {result.blocks.map((b) => (
                 <div key={b.accountId} className="bg-white rounded-xl border border-gray-200 overflow-hidden">
-                  <div className="px-4 py-3 border-b border-gray-100 bg-gray-50 flex items-center justify-between">
+                  <div className="px-4 py-3 border-b border-gray-100 bg-gray-50 flex items-center justify-between flex-wrap gap-2">
                     <div className="font-semibold text-gray-800 text-sm">
                       <span className="font-mono text-gray-500 mr-2">{b.code}</span>
                       {b.name}
                     </div>
-                    <div className="text-xs text-gray-500">
-                      ยอดยกไป <span className="font-semibold text-gray-800">฿{formatCurrency(b.closing)}</span>
+                    <div className="flex items-center gap-4">
+                      <OpeningBalanceEditor
+                        accountId={b.accountId}
+                        currentValue={b.openingManual}
+                        onSaved={(newValue) => {
+                          const delta = round2(newValue - b.openingManual);
+                          setResult((prev) =>
+                            prev
+                              ? {
+                                  ...prev,
+                                  blocks: prev.blocks.map((blk) =>
+                                    blk.accountId === b.accountId
+                                      ? {
+                                          ...blk,
+                                          openingManual: newValue,
+                                          opening: round2(blk.opening + delta),
+                                          closing: round2(blk.closing + delta),
+                                        }
+                                      : blk
+                                  ),
+                                }
+                              : prev
+                          );
+                        }}
+                      />
+                      <div className="text-xs text-gray-500">
+                        ยอดยกไป <span className="font-semibold text-gray-800">฿{formatCurrency(b.closing)}</span>
+                      </div>
                     </div>
                   </div>
                   <div className="overflow-x-auto">
