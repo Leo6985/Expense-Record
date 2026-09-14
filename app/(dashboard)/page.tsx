@@ -1,13 +1,9 @@
 import { prisma } from "@/lib/prisma";
 import Link from "next/link";
 import { getAvailableInvoicesForReceipt } from "@/actions/sales-invoices";
+import { getMonthlyCashFlowByYear, getCashFlowYearOptions } from "@/actions/dashboard";
 import { formatCurrency } from "@/lib/utils";
-import CashFlowChart, { CashFlowMonth } from "@/components/CashFlowChart";
-
-const THAI_MONTH_SHORT = [
-  "ม.ค.", "ก.พ.", "มี.ค.", "เม.ย.", "พ.ค.", "มิ.ย.",
-  "ก.ค.", "ส.ค.", "ก.ย.", "ต.ค.", "พ.ย.", "ธ.ค.",
-];
+import CashFlowSection from "@/components/CashFlowSection";
 
 function monthStart(monthsAgo: number, now: Date) {
   return new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - monthsAgo, 1));
@@ -43,50 +39,6 @@ async function getFinancialSummary() {
     apOutstanding: apOutstanding._sum.totalAmount ?? 0,
     arOutstanding,
   };
-}
-
-// เงินสดเข้า/ออกจริง (ไม่ใช่ยอดรับรู้ตามบัญชี) จากใบรับชำระและการจ่ายเงินย้อนหลัง N เดือน — ใช้
-// ข้อมูลดิบจากเอกสารรับ/จ่ายเงินโดยตรง ไม่ผ่าน buildLedger() (ซึ่งหนักเกินไปสำหรับกราฟหน้าหลัก
-// ที่โหลดทุกครั้ง) ให้ผลเป็น "เงินสดที่เคลื่อนไหวจริง" รายเดือน ตรงกับความหมายของ "กระแสเงินสด"
-async function getMonthlyCashFlow(monthsBack: number): Promise<CashFlowMonth[]> {
-  const now = new Date();
-  const start = monthStart(monthsBack - 1, now);
-
-  const [receipts, payments] = await Promise.all([
-    prisma.receipt.findMany({
-      where: { status: { not: "CANCELLED" }, receiptDate: { gte: start } },
-      select: { receiptDate: true, actualReceivedAmount: true },
-    }),
-    prisma.payment.findMany({
-      where: { paymentDate: { gte: start } },
-      select: { paymentDate: true, amount: true },
-    }),
-  ]);
-
-  const buckets = new Map<string, { label: string; cashIn: number; cashOut: number }>();
-  for (let i = monthsBack - 1; i >= 0; i--) {
-    const d = monthStart(i, now);
-    const key = `${d.getUTCFullYear()}-${d.getUTCMonth()}`;
-    buckets.set(key, { label: `${THAI_MONTH_SHORT[d.getUTCMonth()]} ${String(d.getUTCFullYear() + 543).slice(-2)}`, cashIn: 0, cashOut: 0 });
-  }
-
-  for (const r of receipts) {
-    const key = `${r.receiptDate.getUTCFullYear()}-${r.receiptDate.getUTCMonth()}`;
-    const bucket = buckets.get(key);
-    if (bucket) bucket.cashIn += r.actualReceivedAmount;
-  }
-  for (const p of payments) {
-    const key = `${p.paymentDate.getUTCFullYear()}-${p.paymentDate.getUTCMonth()}`;
-    const bucket = buckets.get(key);
-    if (bucket) bucket.cashOut += p.amount;
-  }
-
-  return Array.from(buckets.values()).map((b) => ({
-    label: b.label,
-    cashIn: Math.round(b.cashIn * 100) / 100,
-    cashOut: Math.round(b.cashOut * 100) / 100,
-    net: Math.round((b.cashIn - b.cashOut) * 100) / 100,
-  }));
 }
 
 async function getRecentPOs() {
@@ -148,9 +100,11 @@ function FinancialTile({
 }
 
 export default async function DashboardPage() {
-  const [financials, cashFlow, recentPOs, recentAPs] = await Promise.all([
+  const currentYear = new Date().getUTCFullYear();
+  const [financials, cashFlowYearOptions, cashFlow, recentPOs, recentAPs] = await Promise.all([
     getFinancialSummary(),
-    getMonthlyCashFlow(6),
+    getCashFlowYearOptions(),
+    getMonthlyCashFlowByYear(currentYear),
     getRecentPOs(),
     getRecentAPs(),
   ]);
@@ -180,15 +134,7 @@ export default async function DashboardPage() {
       </div>
 
       {/* Cash flow chart */}
-      <div className="bg-white rounded-xl border border-gray-200 p-5 mb-8">
-        <div className="flex items-center justify-between mb-3">
-          <h2 className="font-semibold text-gray-900">กระแสเงินสด (6 เดือนล่าสุด)</h2>
-          <Link href="/cash-flow" className="text-sm text-blue-600 hover:underline">
-            งบกระแสเงินสดฉบับเต็ม →
-          </Link>
-        </div>
-        <CashFlowChart data={cashFlow} />
-      </div>
+      <CashFlowSection initialYear={currentYear} initialData={cashFlow} yearOptions={cashFlowYearOptions} />
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Recent POs */}
