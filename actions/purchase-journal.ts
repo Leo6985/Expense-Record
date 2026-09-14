@@ -11,6 +11,8 @@ import {
   toVoucherRecord,
   toLineRecords,
   syncGeneratedVouchersToSheet,
+  accountLabelResolver,
+  JournalPreviewLine,
 } from "@/lib/auto-voucher";
 import { JournalVoucherRecord, JournalVoucherLineRecord } from "@/lib/sheets-tables";
 
@@ -32,6 +34,7 @@ export type PurchaseJournalRow = {
   debitVat: number; // ภาษีซื้อ = vatAmount
   debitExpense: number; // ค่าใช้จ่าย/สินค้า = amount (ก่อน VAT)
   apStatus: string;
+  journalPreview: JournalPreviewLine[]; // ตัวอย่างการบันทึกบัญชี Dr/Cr ของใบตั้งหนี้นี้
   duplicate: boolean; // มี AP ใบอื่นที่ผู้ขาย+เลขที่ใบกำกับซ้ำกัน
   voucherId: string | null;
   voucherNumber: string | null;
@@ -57,7 +60,7 @@ export async function getPurchaseJournal(params: {
   const toDate = new Date(to);
   toDate.setHours(23, 59, 59, 999);
 
-  const [aps, vouchers, config] = await Promise.all([
+  const [aps, vouchers, config, chartAccounts] = await Promise.all([
     prisma.accountsPayable.findMany({
       where: { status: { not: "CANCELLED" }, invoiceDate: { gte: fromDate, lte: toDate } },
       select: {
@@ -72,6 +75,17 @@ export async function getPurchaseJournal(params: {
         vendorId: true,
         vendor: { select: { name: true } },
         status: true,
+        account: { select: { id: true } },
+        gr: {
+          select: {
+            items: {
+              select: {
+                totalPrice: true,
+                poItem: { select: { product: { select: { accountId: true } } } },
+              },
+            },
+          },
+        },
       },
       orderBy: [{ invoiceDate: "asc" }, { apNumber: "asc" }],
     }),
@@ -80,11 +94,17 @@ export async function getPurchaseJournal(params: {
       select: { id: true, voucherNumber: true, status: true, sourceId: true },
     }),
     prisma.accountingConfig.findMany({ where: { key: { in: [...REQUIRED_CONFIG_KEYS] } } }),
+    prisma.chartOfAccount.findMany({ select: { id: true, code: true, name: true } }),
   ]);
 
   const voucherByAP = new Map(vouchers.map((v) => [v.sourceId ?? "", v]));
   const cfg = new Map(config.map((c) => [c.key, c.accountId]));
   const configMissing = REQUIRED_CONFIG_KEYS.filter((k) => !cfg.get(k));
+
+  const label = accountLabelResolver(chartAccounts);
+  const apLabel = label(cfg.get("ap"), "เจ้าหนี้การค้า (ap)");
+  const vatLabel = label(cfg.get("vat_input"), "ภาษีซื้อ (vat_input)");
+  const suspenseId = cfg.get("ap_suspense") ?? null;
 
   // จัดกลุ่มหาใบที่ผู้ขาย+เลขที่ใบกำกับซ้ำกัน (นับเฉพาะเลขที่ใบกำกับที่ไม่ว่าง)
   const byDupKey = new Map<string, typeof aps>();
@@ -109,6 +129,39 @@ export async function getPurchaseJournal(params: {
   const rows: PurchaseJournalRow[] = aps.map((ap) => {
     const v = voucherByAP.get(ap.id) ?? null;
     if (!v) pendingCount++;
+
+    const creditAP = round2(ap.totalAmount);
+    const debitVat = round2(ap.vatAmount);
+    const debitExpense = round2(ap.amount);
+
+    // ปันส่วนขาเดบิตค่าใช้จ่าย/สินค้าตามผังบัญชีของสินค้าใน GR (ถ้ามี) เหมือนตอนสร้าง Voucher จริง
+    // — เพื่อให้ "ตัวอย่างการบันทึกบัญชี" ตรงกับ Voucher ที่จะถูกสร้างจริง
+    const items = ap.gr?.items ?? [];
+    const itemsSum = items.reduce((s, it) => s + it.totalPrice, 0);
+    const expenseByAcc = new Map<string, number>();
+    const bumpExpense = (acc: string | null, amt: number) => {
+      const key = acc ?? "__unset__";
+      expenseByAcc.set(key, round2((expenseByAcc.get(key) ?? 0) + amt));
+    };
+    if (items.length === 0 || itemsSum <= 0) {
+      bumpExpense(ap.account?.id ?? suspenseId, debitExpense);
+    } else {
+      for (const it of items) {
+        bumpExpense(it.poItem.product?.accountId ?? ap.account?.id ?? suspenseId, (it.totalPrice / itemsSum) * debitExpense);
+      }
+    }
+    const expenseLines: JournalPreviewLine[] = [...expenseByAcc.entries()].map(([acc, amt]) => ({
+      ...label(acc === "__unset__" ? null : acc, "ค่าใช้จ่าย/สินค้า (ap_suspense)"),
+      debit: amt,
+      credit: 0,
+    }));
+
+    const journalPreview: JournalPreviewLine[] = [
+      ...(debitVat !== 0 ? [{ ...vatLabel, debit: debitVat, credit: 0 }] : []),
+      ...expenseLines,
+      { ...apLabel, debit: 0, credit: creditAP },
+    ];
+
     return {
       apId: ap.id,
       apNumber: ap.apNumber,
@@ -116,10 +169,11 @@ export async function getPurchaseJournal(params: {
       invoiceDate: ap.invoiceDate.toISOString(),
       vendorName: ap.vendor.name,
       source: ap.grId ? "GR" : "DIRECT",
-      creditAP: round2(ap.totalAmount),
-      debitVat: round2(ap.vatAmount),
-      debitExpense: round2(ap.amount),
+      creditAP,
+      debitVat,
+      debitExpense,
       apStatus: ap.status,
+      journalPreview,
       duplicate: ap.invoiceNumber?.trim() ? dupKeys.has(dupKey(ap.vendorId, ap.invoiceNumber)) : false,
       voucherId: v?.id ?? null,
       voucherNumber: v?.voucherNumber ?? null,

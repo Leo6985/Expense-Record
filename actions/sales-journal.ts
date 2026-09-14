@@ -11,6 +11,8 @@ import {
   toVoucherRecord,
   toLineRecords,
   syncGeneratedVouchersToSheet,
+  accountLabelResolver,
+  JournalPreviewLine,
 } from "@/lib/auto-voucher";
 import { JournalVoucherRecord, JournalVoucherLineRecord } from "@/lib/sheets-tables";
 
@@ -26,6 +28,7 @@ export type SalesJournalRow = {
   creditRevenue: number;
   creditVat: number;
   invoiceStatus: string;
+  journalPreview: JournalPreviewLine[]; // ตัวอย่างการบันทึกบัญชี Dr/Cr ของใบกำกับนี้
   voucherId: string | null;
   voucherNumber: string | null;
   voucherStatus: string | null; // DRAFT | APPROVED | null (ยังไม่สร้าง)
@@ -49,7 +52,7 @@ export async function getSalesJournal(params: {
   const toDate = new Date(to);
   toDate.setHours(23, 59, 59, 999);
 
-  const [invoices, vouchers, config] = await Promise.all([
+  const [invoices, vouchers, config, chartAccounts] = await Promise.all([
     prisma.salesInvoice.findMany({
       where: { status: { not: "CANCELLED" }, invoiceDate: { gte: fromDate, lte: toDate } },
       include: { customer: { select: { name: true } } },
@@ -60,25 +63,40 @@ export async function getSalesJournal(params: {
       select: { id: true, voucherNumber: true, status: true, sourceId: true },
     }),
     prisma.accountingConfig.findMany({ where: { key: { in: [...REQUIRED_CONFIG_KEYS] } } }),
+    prisma.chartOfAccount.findMany({ select: { id: true, code: true, name: true } }),
   ]);
 
   const voucherByInvoice = new Map(vouchers.map((v) => [v.sourceId ?? "", v]));
   const cfg = new Map(config.map((c) => [c.key, c.accountId]));
   const configMissing = REQUIRED_CONFIG_KEYS.filter((k) => !cfg.get(k));
 
+  const label = accountLabelResolver(chartAccounts);
+  const arLabel = label(cfg.get("ar"), "ลูกหนี้การค้า (ar)");
+  const revenueLabel = label(cfg.get("revenue"), "รายได้ (revenue)");
+  const vatLabel = label(cfg.get("vat_output"), "ภาษีขาย (vat_output)");
+
   let pendingCount = 0;
   const rows: SalesJournalRow[] = invoices.map((inv) => {
     const v = voucherByInvoice.get(inv.id) ?? null;
     if (!v) pendingCount++;
+    const debitAR = round2(inv.totalAmount);
+    const creditRevenue = round2(inv.amount - inv.discountAmount);
+    const creditVat = round2(inv.vatAmount);
+    const journalPreview: JournalPreviewLine[] = [
+      { ...arLabel, debit: debitAR, credit: 0 },
+      { ...revenueLabel, debit: 0, credit: creditRevenue },
+      ...(creditVat !== 0 ? [{ ...vatLabel, debit: 0, credit: creditVat }] : []),
+    ];
     return {
       invoiceId: inv.id,
       invoiceNumber: inv.invoiceNumber,
       invoiceDate: inv.invoiceDate.toISOString(),
       customerName: inv.customer.name,
-      debitAR: round2(inv.totalAmount),
-      creditRevenue: round2(inv.amount - inv.discountAmount),
-      creditVat: round2(inv.vatAmount),
+      debitAR,
+      creditRevenue,
+      creditVat,
       invoiceStatus: inv.status,
+      journalPreview,
       voucherId: v?.id ?? null,
       voucherNumber: v?.voucherNumber ?? null,
       voucherStatus: v?.status ?? null,

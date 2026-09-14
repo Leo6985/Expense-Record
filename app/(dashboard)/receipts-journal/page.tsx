@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { Fragment, useState } from "react";
 import Link from "next/link";
 import {
   getReceiptsJournal,
@@ -11,6 +11,7 @@ import {
 import { formatCurrency, formatDate } from "@/lib/utils";
 import { downloadCSV } from "@/lib/csv";
 import PageLoading from "@/components/PageLoading";
+import JournalPreviewPanel from "@/components/JournalPreviewPanel";
 
 const cell = (n: number) => (n === 0 ? "" : `฿${formatCurrency(n)}`);
 const money = (n: number) => `${n < 0 ? "-" : ""}฿${formatCurrency(Math.abs(n))}`;
@@ -25,6 +26,7 @@ export default function ReceiptsJournalPage() {
   const [from, setFrom] = useState(`${thisMonth}-01`);
   const [to, setTo] = useState(new Date().toISOString().split("T")[0]);
   const [view, setView] = useState<ReceiptsJournalView | null>(null);
+  const [expandedId, setExpandedId] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [generating, setGenerating] = useState(false);
   const [result, setResult] = useState<GenerateReceiptVouchersResult | null>(null);
@@ -200,6 +202,7 @@ export default function ReceiptsJournalPage() {
               <table className="w-full text-sm">
                 <thead>
                   <tr className="bg-gray-50 border-b border-gray-200 text-gray-600">
+                    <th className="px-3 py-2 font-medium w-8"></th>
                     <th className="text-left px-3 py-2 font-medium">วันที่</th>
                     <th className="text-left px-3 py-2 font-medium">เลขที่ใบรับชำระ</th>
                     <th className="text-left px-3 py-2 font-medium">ลูกค้า</th>
@@ -214,46 +217,67 @@ export default function ReceiptsJournalPage() {
                 <tbody>
                   {view.rows.map((r) => {
                     const badge = r.voucherStatus ? voucherBadge[r.voucherStatus] : null;
+                    const isExpanded = expandedId === r.receiptId;
                     return (
-                      <tr key={r.receiptId} className="border-b border-gray-100 hover:bg-gray-50">
-                        <td className="px-3 py-2 text-gray-600 whitespace-nowrap">{formatDate(r.receiptDate)}</td>
-                        <td className="px-3 py-2 font-mono text-gray-700">
-                          {r.receiptNumber}
-                          {r.duplicate && (
-                            <span className="ml-1.5 inline-flex px-1.5 py-0.5 rounded-full text-[11px] font-medium bg-orange-100 text-orange-700">
-                              ซ้ำ
-                            </span>
-                          )}
-                        </td>
-                        <td className="px-3 py-2 text-gray-800">{r.customerName}</td>
-                        <td className="px-3 py-2 text-right text-gray-700 border-l border-gray-100">{cell(r.debitBank)}</td>
-                        <td className="px-3 py-2 text-right text-gray-700">{cell(r.debitFee)}</td>
-                        <td className="px-3 py-2 text-right text-gray-700">{cell(r.debitWht)}</td>
-                        <td className="px-3 py-2 text-right text-gray-700">{cell(r.creditAR)}</td>
-                        <td className={`px-3 py-2 text-right ${r.variance === 0 ? "text-gray-400" : r.variance > 0 ? "text-green-700" : "text-red-600"}`}>
-                          {r.variance === 0 ? "" : `${money(r.variance)} ${r.variance > 0 ? "เกิน" : "ขาด"}`}
-                        </td>
-                        <td className="px-3 py-2 border-l border-gray-100 whitespace-nowrap">
-                          {r.voucherId ? (
-                            <Link href={`/journal-vouchers/${r.voucherId}`} className="inline-flex items-center gap-1.5">
-                              <span className="font-mono text-blue-700 hover:underline">{r.voucherNumber}</span>
-                              {badge && (
-                                <span className={`inline-flex px-1.5 py-0.5 rounded-full text-[11px] font-medium ${badge.color}`}>
-                                  {badge.label}
-                                </span>
-                              )}
-                            </Link>
-                          ) : (
-                            <span className="text-gray-400">ยังไม่สร้าง</span>
-                          )}
-                        </td>
-                      </tr>
+                      <Fragment key={r.receiptId}>
+                        <tr className="border-b border-gray-100 hover:bg-gray-50">
+                          <td className="px-3 py-2">
+                            <button
+                              type="button"
+                              onClick={() => setExpandedId(isExpanded ? null : r.receiptId)}
+                              className="text-gray-400 hover:text-blue-600"
+                              title="ดูตัวอย่างการบันทึกบัญชี"
+                            >
+                              {isExpanded ? "▾" : "▸"}
+                            </button>
+                          </td>
+                          <td className="px-3 py-2 text-gray-600 whitespace-nowrap">{formatDate(r.receiptDate)}</td>
+                          <td className="px-3 py-2 font-mono text-gray-700">
+                            {r.receiptNumber}
+                            {r.duplicate && (
+                              <span className="ml-1.5 inline-flex px-1.5 py-0.5 rounded-full text-[11px] font-medium bg-orange-100 text-orange-700">
+                                ซ้ำ
+                              </span>
+                            )}
+                          </td>
+                          <td className="px-3 py-2 text-gray-800">{r.customerName}</td>
+                          <td className="px-3 py-2 text-right text-gray-700 border-l border-gray-100">{cell(r.debitBank)}</td>
+                          <td className="px-3 py-2 text-right text-gray-700">{cell(r.debitFee)}</td>
+                          <td className="px-3 py-2 text-right text-gray-700">{cell(r.debitWht)}</td>
+                          <td className="px-3 py-2 text-right text-gray-700">{cell(r.creditAR)}</td>
+                          <td className={`px-3 py-2 text-right ${r.variance === 0 ? "text-gray-400" : r.variance > 0 ? "text-green-700" : "text-red-600"}`}>
+                            {r.variance === 0 ? "" : `${money(r.variance)} ${r.variance > 0 ? "เกิน" : "ขาด"}`}
+                          </td>
+                          <td className="px-3 py-2 border-l border-gray-100 whitespace-nowrap">
+                            {r.voucherId ? (
+                              <Link href={`/journal-vouchers/${r.voucherId}`} className="inline-flex items-center gap-1.5">
+                                <span className="font-mono text-blue-700 hover:underline">{r.voucherNumber}</span>
+                                {badge && (
+                                  <span className={`inline-flex px-1.5 py-0.5 rounded-full text-[11px] font-medium ${badge.color}`}>
+                                    {badge.label}
+                                  </span>
+                                )}
+                              </Link>
+                            ) : (
+                              <span className="text-gray-400">ยังไม่สร้าง</span>
+                            )}
+                          </td>
+                        </tr>
+                        {isExpanded && (
+                          <tr className="border-b border-gray-100 bg-gray-50/50">
+                            <td></td>
+                            <td colSpan={9} className="px-3 py-3">
+                              <JournalPreviewPanel lines={r.journalPreview} />
+                            </td>
+                          </tr>
+                        )}
+                      </Fragment>
                     );
                   })}
                 </tbody>
                 <tfoot>
                   <tr className="bg-gray-50 font-semibold border-t-2 border-gray-300 text-gray-900">
-                    <td className="px-3 py-2.5" colSpan={3}>รวม</td>
+                    <td className="px-3 py-2.5" colSpan={4}>รวม</td>
                     <td className="px-3 py-2.5 text-right border-l border-gray-200">฿{formatCurrency(view.totals.debitBank)}</td>
                     <td className="px-3 py-2.5 text-right">฿{formatCurrency(view.totals.debitFee)}</td>
                     <td className="px-3 py-2.5 text-right">฿{formatCurrency(view.totals.debitWht)}</td>

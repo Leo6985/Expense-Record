@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { Fragment, useState } from "react";
 import Link from "next/link";
 import {
   getSalesJournal,
@@ -11,6 +11,7 @@ import {
 import { formatCurrency, formatDate } from "@/lib/utils";
 import { downloadCSV } from "@/lib/csv";
 import PageLoading from "@/components/PageLoading";
+import JournalPreviewPanel from "@/components/JournalPreviewPanel";
 
 const cell = (n: number) => (n === 0 ? "" : `฿${formatCurrency(n)}`);
 
@@ -24,6 +25,7 @@ export default function SalesJournalPage() {
   const [from, setFrom] = useState(`${thisMonth}-01`);
   const [to, setTo] = useState(new Date().toISOString().split("T")[0]);
   const [view, setView] = useState<SalesJournalView | null>(null);
+  const [expandedId, setExpandedId] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [generating, setGenerating] = useState(false);
   const [result, setResult] = useState<GenerateSalesVouchersResult | null>(null);
@@ -180,6 +182,7 @@ export default function SalesJournalPage() {
               <table className="w-full text-sm">
                 <thead>
                   <tr className="bg-gray-50 border-b border-gray-200 text-gray-600">
+                    <th className="px-3 py-2 font-medium w-8"></th>
                     <th className="text-left px-3 py-2 font-medium">วันที่</th>
                     <th className="text-left px-3 py-2 font-medium">เลขที่ใบกำกับ</th>
                     <th className="text-left px-3 py-2 font-medium">ลูกค้า</th>
@@ -192,35 +195,56 @@ export default function SalesJournalPage() {
                 <tbody>
                   {view.rows.map((r) => {
                     const badge = r.voucherStatus ? voucherBadge[r.voucherStatus] : null;
+                    const isExpanded = expandedId === r.invoiceId;
                     return (
-                      <tr key={r.invoiceId} className="border-b border-gray-100 hover:bg-gray-50">
-                        <td className="px-3 py-2 text-gray-600 whitespace-nowrap">{formatDate(r.invoiceDate)}</td>
-                        <td className="px-3 py-2 font-mono text-gray-700">{r.invoiceNumber}</td>
-                        <td className="px-3 py-2 text-gray-800">{r.customerName}</td>
-                        <td className="px-3 py-2 text-right text-gray-700 border-l border-gray-100">{cell(r.debitAR)}</td>
-                        <td className="px-3 py-2 text-right text-gray-700">{cell(r.creditRevenue)}</td>
-                        <td className="px-3 py-2 text-right text-gray-700">{cell(r.creditVat)}</td>
-                        <td className="px-3 py-2 border-l border-gray-100 whitespace-nowrap">
-                          {r.voucherId ? (
-                            <Link href={`/journal-vouchers/${r.voucherId}`} className="inline-flex items-center gap-1.5">
-                              <span className="font-mono text-blue-700 hover:underline">{r.voucherNumber}</span>
-                              {badge && (
-                                <span className={`inline-flex px-1.5 py-0.5 rounded-full text-[11px] font-medium ${badge.color}`}>
-                                  {badge.label}
-                                </span>
-                              )}
-                            </Link>
-                          ) : (
-                            <span className="text-gray-400">ยังไม่สร้าง</span>
-                          )}
-                        </td>
-                      </tr>
+                      <Fragment key={r.invoiceId}>
+                        <tr className="border-b border-gray-100 hover:bg-gray-50">
+                          <td className="px-3 py-2">
+                            <button
+                              type="button"
+                              onClick={() => setExpandedId(isExpanded ? null : r.invoiceId)}
+                              className="text-gray-400 hover:text-blue-600"
+                              title="ดูตัวอย่างการบันทึกบัญชี"
+                            >
+                              {isExpanded ? "▾" : "▸"}
+                            </button>
+                          </td>
+                          <td className="px-3 py-2 text-gray-600 whitespace-nowrap">{formatDate(r.invoiceDate)}</td>
+                          <td className="px-3 py-2 font-mono text-gray-700">{r.invoiceNumber}</td>
+                          <td className="px-3 py-2 text-gray-800">{r.customerName}</td>
+                          <td className="px-3 py-2 text-right text-gray-700 border-l border-gray-100">{cell(r.debitAR)}</td>
+                          <td className="px-3 py-2 text-right text-gray-700">{cell(r.creditRevenue)}</td>
+                          <td className="px-3 py-2 text-right text-gray-700">{cell(r.creditVat)}</td>
+                          <td className="px-3 py-2 border-l border-gray-100 whitespace-nowrap">
+                            {r.voucherId ? (
+                              <Link href={`/journal-vouchers/${r.voucherId}`} className="inline-flex items-center gap-1.5">
+                                <span className="font-mono text-blue-700 hover:underline">{r.voucherNumber}</span>
+                                {badge && (
+                                  <span className={`inline-flex px-1.5 py-0.5 rounded-full text-[11px] font-medium ${badge.color}`}>
+                                    {badge.label}
+                                  </span>
+                                )}
+                              </Link>
+                            ) : (
+                              <span className="text-gray-400">ยังไม่สร้าง</span>
+                            )}
+                          </td>
+                        </tr>
+                        {isExpanded && (
+                          <tr className="border-b border-gray-100 bg-gray-50/50">
+                            <td></td>
+                            <td colSpan={7} className="px-3 py-3">
+                              <JournalPreviewPanel lines={r.journalPreview} />
+                            </td>
+                          </tr>
+                        )}
+                      </Fragment>
                     );
                   })}
                 </tbody>
                 <tfoot>
                   <tr className="bg-gray-50 font-semibold border-t-2 border-gray-300 text-gray-900">
-                    <td className="px-3 py-2.5" colSpan={3}>รวม</td>
+                    <td className="px-3 py-2.5" colSpan={4}>รวม</td>
                     <td className="px-3 py-2.5 text-right border-l border-gray-200">฿{formatCurrency(view.totals.debitAR)}</td>
                     <td className="px-3 py-2.5 text-right">฿{formatCurrency(view.totals.creditRevenue)}</td>
                     <td className="px-3 py-2.5 text-right">฿{formatCurrency(view.totals.creditVat)}</td>

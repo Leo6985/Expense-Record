@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { Fragment, useMemo, useState } from "react";
 import Link from "next/link";
 import {
   getPurchaseJournal,
@@ -11,6 +11,7 @@ import {
 import { formatCurrency, formatDate } from "@/lib/utils";
 import { downloadCSV } from "@/lib/csv";
 import PageLoading from "@/components/PageLoading";
+import JournalPreviewPanel from "@/components/JournalPreviewPanel";
 
 const cell = (n: number) => (n === 0 ? "" : `฿${formatCurrency(n)}`);
 
@@ -23,16 +24,41 @@ export default function PurchaseJournalPage() {
   const thisMonth = new Date().toISOString().slice(0, 7);
   const [from, setFrom] = useState(`${thisMonth}-01`);
   const [to, setTo] = useState(new Date().toISOString().split("T")[0]);
+  const [docSearch, setDocSearch] = useState("");
+  const [expandedId, setExpandedId] = useState<string | null>(null);
   const [view, setView] = useState<PurchaseJournalView | null>(null);
   const [loading, setLoading] = useState(false);
   const [generating, setGenerating] = useState(false);
   const [result, setResult] = useState<GeneratePurchaseVouchersResult | null>(null);
   const [error, setError] = useState<string | null>(null);
 
+  const filteredRows = useMemo(() => {
+    if (!view) return [];
+    const q = docSearch.trim().toLowerCase();
+    if (!q) return view.rows;
+    return view.rows.filter(
+      (r) => r.apNumber.toLowerCase().includes(q) || r.invoiceNumber.toLowerCase().includes(q)
+    );
+  }, [view, docSearch]);
+
+  const filteredTotals = useMemo(
+    () =>
+      filteredRows.reduce(
+        (t, r) => ({
+          creditAP: t.creditAP + r.creditAP,
+          debitVat: t.debitVat + r.debitVat,
+          debitExpense: t.debitExpense + r.debitExpense,
+        }),
+        { creditAP: 0, debitVat: 0, debitExpense: 0 }
+      ),
+    [filteredRows]
+  );
+
   async function handleSearch() {
     setLoading(true);
     setResult(null);
     setError(null);
+    setDocSearch("");
     try {
       setView(await getPurchaseJournal({ from, to }));
     } finally {
@@ -60,24 +86,23 @@ export default function PurchaseJournalPage() {
     if (!view) return;
     const headers = [
       "วันที่", "เลขที่ใบตั้งหนี้", "เลขที่ใบกำกับ", "ผู้ขาย", "ที่มา",
-      "เครดิต เจ้าหนี้", "เดบิต ภาษีซื้อ", "เดบิต ค่าใช้จ่าย/สินค้า",
+      "เดบิต ภาษีซื้อ", "เดบิต ค่าใช้จ่าย/สินค้า", "เครดิต เจ้าหนี้",
       "เลขที่ Voucher", "สถานะ Voucher", "ซ้ำ?",
     ];
-    const rows: (string | number)[][] = view.rows.map((r) => [
+    const rows: (string | number)[][] = filteredRows.map((r) => [
       formatDate(r.invoiceDate),
       r.apNumber,
       r.invoiceNumber,
       r.vendorName,
       r.source === "GR" ? "รับสินค้า" : "บันทึกตรง/นำเข้า",
-      r.creditAP,
       r.debitVat,
       r.debitExpense,
+      r.creditAP,
       r.voucherNumber ?? "",
       r.voucherStatus ? voucherBadge[r.voucherStatus]?.label ?? r.voucherStatus : "ยังไม่สร้าง",
       r.duplicate ? "ซ้ำ" : "",
     ]);
-    const t = view.totals;
-    rows.push(["", "", "", "รวม", "", t.creditAP, t.debitVat, t.debitExpense, "", "", ""]);
+    rows.push(["", "", "", "รวม", "", filteredTotals.debitVat, filteredTotals.debitExpense, filteredTotals.creditAP, "", "", ""]);
     downloadCSV(`purchase_journal_${view.from}_${view.to}.csv`, headers, rows);
   }
 
@@ -121,6 +146,18 @@ export default function PurchaseJournalPage() {
         >
           {loading ? "กำลังโหลด..." : "ค้นหา"}
         </button>
+        {view && (
+          <div>
+            <label className="block text-xs font-medium text-gray-600 mb-1">ค้นเลขที่เอกสาร</label>
+            <input
+              type="text"
+              value={docSearch}
+              onChange={(e) => setDocSearch(e.target.value)}
+              placeholder="เลขที่ใบตั้งหนี้ / เลขที่ใบกำกับ"
+              className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 w-56"
+            />
+          </div>
+        )}
         {view && view.rows.length > 0 && (
           <button
             onClick={handleDownloadCSV}
@@ -176,7 +213,7 @@ export default function PurchaseJournalPage() {
 
           <div className="flex items-center justify-between mb-3">
             <p className="text-sm text-gray-600">
-              ใบตั้งหนี้ {view.rows.length} ใบ · ยังไม่มี Voucher{" "}
+              ใบตั้งหนี้ {filteredRows.length} ใบ{docSearch.trim() && ` (จากทั้งหมด ${view.rows.length} ใบ)`} · ยังไม่มี Voucher{" "}
               <span className={view.pendingCount > 0 ? "font-semibold text-orange-700" : ""}>{view.pendingCount}</span> ใบ
             </p>
             <button
@@ -192,72 +229,94 @@ export default function PurchaseJournalPage() {
             </button>
           </div>
 
-          {view.rows.length === 0 ? (
+          {filteredRows.length === 0 ? (
             <div className="text-center text-gray-400 text-sm py-12 bg-white rounded-xl border border-gray-200">
-              ไม่มีใบตั้งหนี้ในช่วงเวลาที่เลือก
+              {docSearch.trim() ? "ไม่พบเลขที่เอกสารที่ค้นหา" : "ไม่มีใบตั้งหนี้ในช่วงเวลาที่เลือก"}
             </div>
           ) : (
             <div className="bg-white rounded-xl border border-gray-200 overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>
                   <tr className="bg-gray-50 border-b border-gray-200 text-gray-600">
+                    <th className="px-3 py-2 font-medium w-8"></th>
                     <th className="text-left px-3 py-2 font-medium">วันที่</th>
                     <th className="text-left px-3 py-2 font-medium">เลขที่ใบตั้งหนี้</th>
                     <th className="text-left px-3 py-2 font-medium">เลขที่ใบกำกับ</th>
                     <th className="text-left px-3 py-2 font-medium">ผู้ขาย</th>
                     <th className="text-left px-3 py-2 font-medium">ที่มา</th>
-                    <th className="text-right px-3 py-2 font-medium border-l border-gray-200">เครดิต เจ้าหนี้</th>
-                    <th className="text-right px-3 py-2 font-medium">เดบิต ภาษีซื้อ</th>
+                    <th className="text-right px-3 py-2 font-medium border-l border-gray-200">เดบิต ภาษีซื้อ</th>
                     <th className="text-right px-3 py-2 font-medium">เดบิต ค่าใช้จ่าย/สินค้า</th>
+                    <th className="text-right px-3 py-2 font-medium">เครดิต เจ้าหนี้</th>
                     <th className="text-left px-3 py-2 font-medium border-l border-gray-200">Voucher</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {view.rows.map((r) => {
+                  {filteredRows.map((r) => {
                     const badge = r.voucherStatus ? voucherBadge[r.voucherStatus] : null;
+                    const isExpanded = expandedId === r.apId;
                     return (
-                      <tr key={r.apId} className="border-b border-gray-100 hover:bg-gray-50">
-                        <td className="px-3 py-2 text-gray-600 whitespace-nowrap">{formatDate(r.invoiceDate)}</td>
-                        <td className="px-3 py-2 font-mono text-gray-700">{r.apNumber}</td>
-                        <td className="px-3 py-2 font-mono text-gray-700">
-                          {r.invoiceNumber}
-                          {r.duplicate && (
-                            <span className="ml-1.5 inline-flex px-1.5 py-0.5 rounded-full text-[11px] font-medium bg-orange-100 text-orange-700">
-                              ซ้ำ
-                            </span>
-                          )}
-                        </td>
-                        <td className="px-3 py-2 text-gray-800">{r.vendorName}</td>
-                        <td className="px-3 py-2 text-gray-500 whitespace-nowrap">
-                          {r.source === "GR" ? "รับสินค้า" : "บันทึกตรง/นำเข้า"}
-                        </td>
-                        <td className="px-3 py-2 text-right text-gray-700 border-l border-gray-100">{cell(r.creditAP)}</td>
-                        <td className="px-3 py-2 text-right text-gray-700">{cell(r.debitVat)}</td>
-                        <td className="px-3 py-2 text-right text-gray-700">{cell(r.debitExpense)}</td>
-                        <td className="px-3 py-2 border-l border-gray-100 whitespace-nowrap">
-                          {r.voucherId ? (
-                            <Link href={`/journal-vouchers/${r.voucherId}`} className="inline-flex items-center gap-1.5">
-                              <span className="font-mono text-blue-700 hover:underline">{r.voucherNumber}</span>
-                              {badge && (
-                                <span className={`inline-flex px-1.5 py-0.5 rounded-full text-[11px] font-medium ${badge.color}`}>
-                                  {badge.label}
-                                </span>
-                              )}
-                            </Link>
-                          ) : (
-                            <span className="text-gray-400">ยังไม่สร้าง</span>
-                          )}
-                        </td>
-                      </tr>
+                      <Fragment key={r.apId}>
+                        <tr className="border-b border-gray-100 hover:bg-gray-50">
+                          <td className="px-3 py-2">
+                            <button
+                              type="button"
+                              onClick={() => setExpandedId(isExpanded ? null : r.apId)}
+                              className="text-gray-400 hover:text-blue-600"
+                              title="ดูตัวอย่างการบันทึกบัญชี"
+                            >
+                              {isExpanded ? "▾" : "▸"}
+                            </button>
+                          </td>
+                          <td className="px-3 py-2 text-gray-600 whitespace-nowrap">{formatDate(r.invoiceDate)}</td>
+                          <td className="px-3 py-2 font-mono text-gray-700">{r.apNumber}</td>
+                          <td className="px-3 py-2 font-mono text-gray-700">
+                            {r.invoiceNumber}
+                            {r.duplicate && (
+                              <span className="ml-1.5 inline-flex px-1.5 py-0.5 rounded-full text-[11px] font-medium bg-orange-100 text-orange-700">
+                                ซ้ำ
+                              </span>
+                            )}
+                          </td>
+                          <td className="px-3 py-2 text-gray-800">{r.vendorName}</td>
+                          <td className="px-3 py-2 text-gray-500 whitespace-nowrap">
+                            {r.source === "GR" ? "รับสินค้า" : "บันทึกตรง/นำเข้า"}
+                          </td>
+                          <td className="px-3 py-2 text-right text-gray-700 border-l border-gray-100">{cell(r.debitVat)}</td>
+                          <td className="px-3 py-2 text-right text-gray-700">{cell(r.debitExpense)}</td>
+                          <td className="px-3 py-2 text-right text-gray-700">{cell(r.creditAP)}</td>
+                          <td className="px-3 py-2 border-l border-gray-100 whitespace-nowrap">
+                            {r.voucherId ? (
+                              <Link href={`/journal-vouchers/${r.voucherId}`} className="inline-flex items-center gap-1.5">
+                                <span className="font-mono text-blue-700 hover:underline">{r.voucherNumber}</span>
+                                {badge && (
+                                  <span className={`inline-flex px-1.5 py-0.5 rounded-full text-[11px] font-medium ${badge.color}`}>
+                                    {badge.label}
+                                  </span>
+                                )}
+                              </Link>
+                            ) : (
+                              <span className="text-gray-400">ยังไม่สร้าง</span>
+                            )}
+                          </td>
+                        </tr>
+                        {isExpanded && (
+                          <tr className="border-b border-gray-100 bg-gray-50/50">
+                            <td></td>
+                            <td colSpan={9} className="px-3 py-3">
+                              <JournalPreviewPanel lines={r.journalPreview} />
+                            </td>
+                          </tr>
+                        )}
+                      </Fragment>
                     );
                   })}
                 </tbody>
                 <tfoot>
                   <tr className="bg-gray-50 font-semibold border-t-2 border-gray-300 text-gray-900">
-                    <td className="px-3 py-2.5" colSpan={5}>รวม</td>
-                    <td className="px-3 py-2.5 text-right border-l border-gray-200">฿{formatCurrency(view.totals.creditAP)}</td>
-                    <td className="px-3 py-2.5 text-right">฿{formatCurrency(view.totals.debitVat)}</td>
-                    <td className="px-3 py-2.5 text-right">฿{formatCurrency(view.totals.debitExpense)}</td>
+                    <td className="px-3 py-2.5" colSpan={6}>รวม</td>
+                    <td className="px-3 py-2.5 text-right border-l border-gray-200">฿{formatCurrency(filteredTotals.debitVat)}</td>
+                    <td className="px-3 py-2.5 text-right">฿{formatCurrency(filteredTotals.debitExpense)}</td>
+                    <td className="px-3 py-2.5 text-right">฿{formatCurrency(filteredTotals.creditAP)}</td>
                     <td className="px-3 py-2.5 border-l border-gray-200"></td>
                   </tr>
                 </tfoot>

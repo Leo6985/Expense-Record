@@ -12,6 +12,8 @@ import {
   toLineRecords,
   syncGeneratedVouchersToSheet,
   configResolver,
+  accountLabelResolver,
+  JournalPreviewLine,
 } from "@/lib/auto-voucher";
 import { JournalVoucherRecord, JournalVoucherLineRecord } from "@/lib/sheets-tables";
 
@@ -59,7 +61,7 @@ function buildReceiptLines(r: ReceiptRow, res: Resolver) {
   const missing = candidates.filter((c) => c.accountId === null).map((c) => c.missKey);
   const lines = candidates
     .filter((c) => c.debit !== 0 || c.credit !== 0)
-    .map((c) => ({ accountId: c.accountId, debit: c.debit, credit: c.credit }));
+    .map((c) => ({ accountId: c.accountId, debit: c.debit, credit: c.credit, missKey: c.missKey }));
 
   return { arTotal, recv, fee, wht, variance: diff, lines, missing };
 }
@@ -74,6 +76,7 @@ export type ReceiptsJournalRow = {
   debitWht: number;
   creditAR: number;
   variance: number; // >0 รับเกิน (Cr ผลต่าง), <0 รับขาด (Dr ผลต่าง)
+  journalPreview: JournalPreviewLine[]; // ตัวอย่างการบันทึกบัญชี Dr/Cr ของใบรับชำระนี้
   duplicate: boolean;
   voucherId: string | null;
   voucherNumber: string | null;
@@ -99,7 +102,7 @@ export async function getReceiptsJournal(params: {
   const toDate = new Date(to);
   toDate.setHours(23, 59, 59, 999);
 
-  const [receipts, vouchers, config] = await Promise.all([
+  const [receipts, vouchers, config, chartAccounts] = await Promise.all([
     prisma.receipt.findMany({
       where: { status: { not: "CANCELLED" }, receiptDate: { gte: fromDate, lte: toDate } },
       select: {
@@ -121,9 +124,11 @@ export async function getReceiptsJournal(params: {
       select: { id: true, voucherNumber: true, status: true, sourceId: true },
     }),
     prisma.accountingConfig.findMany(),
+    prisma.chartOfAccount.findMany({ select: { id: true, code: true, name: true } }),
   ]);
 
   const res = configResolver(config);
+  const label = accountLabelResolver(chartAccounts);
   const voucherByReceipt = new Map(vouchers.map((v) => [v.sourceId ?? "", v]));
 
   // ตรวจซ้ำ: บัญชีธนาคาร + เลขที่อ้างอิง + ยอดที่ได้รับจริง ตรงกัน (เลขที่อ้างอิงต้องไม่ว่าง)
@@ -151,6 +156,11 @@ export async function getReceiptsJournal(params: {
     b.missing.forEach((m) => configMissingSet.add(m));
     const v = voucherByReceipt.get(r.id) ?? null;
     if (!v) pendingCount++;
+    const journalPreview: JournalPreviewLine[] = b.lines.map((l) => ({
+      ...label(l.accountId, l.missKey),
+      debit: l.debit,
+      credit: l.credit,
+    }));
     return {
       receiptId: r.id,
       receiptNumber: r.receiptNumber,
@@ -161,6 +171,7 @@ export async function getReceiptsJournal(params: {
       debitWht: b.wht,
       creditAR: b.arTotal,
       variance: b.variance,
+      journalPreview,
       duplicate: r.referenceNumber?.trim()
         ? dupKeys.has(dupKey(r.companyBankAccountId, r.referenceNumber, r.actualReceivedAmount))
         : false,

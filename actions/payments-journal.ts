@@ -12,6 +12,8 @@ import {
   toLineRecords,
   syncGeneratedVouchersToSheet,
   configResolver,
+  accountLabelResolver,
+  JournalPreviewLine,
 } from "@/lib/auto-voucher";
 import { JournalVoucherRecord, JournalVoucherLineRecord } from "@/lib/sheets-tables";
 
@@ -51,7 +53,7 @@ function buildPaymentLines(p: PaymentRow, res: Resolver) {
   const missing = candidates.filter((c) => c.accountId === null).map((c) => c.missKey);
   const lines = candidates
     .filter((c) => c.debit !== 0 || c.credit !== 0)
-    .map((c) => ({ accountId: c.accountId, debit: c.debit, credit: c.credit }));
+    .map((c) => ({ accountId: c.accountId, debit: c.debit, credit: c.credit, missKey: c.missKey }));
 
   return { amount, wht, apGross, lines, missing };
 }
@@ -64,6 +66,7 @@ export type PaymentsJournalRow = {
   debitAP: number;
   creditWht: number;
   creditBank: number;
+  journalPreview: JournalPreviewLine[]; // ตัวอย่างการบันทึกบัญชี Dr/Cr ของการจ่ายเงินนี้
   duplicate: boolean;
   voucherId: string | null;
   voucherNumber: string | null;
@@ -89,7 +92,7 @@ export async function getPaymentsJournal(params: {
   const toDate = new Date(to);
   toDate.setHours(23, 59, 59, 999);
 
-  const [payments, vouchers, config] = await Promise.all([
+  const [payments, vouchers, config, chartAccounts] = await Promise.all([
     prisma.payment.findMany({
       where: { paymentDate: { gte: fromDate, lte: toDate } },
       select: {
@@ -114,9 +117,11 @@ export async function getPaymentsJournal(params: {
       select: { id: true, voucherNumber: true, status: true, sourceId: true },
     }),
     prisma.accountingConfig.findMany(),
+    prisma.chartOfAccount.findMany({ select: { id: true, code: true, name: true } }),
   ]);
 
   const res = configResolver(config);
+  const label = accountLabelResolver(chartAccounts);
   const voucherByPayment = new Map(vouchers.map((v) => [v.sourceId ?? "", v]));
 
   const byDup = new Map<string, PaymentRow[]>();
@@ -143,6 +148,11 @@ export async function getPaymentsJournal(params: {
     b.missing.forEach((m) => configMissingSet.add(m));
     const v = voucherByPayment.get(p.id) ?? null;
     if (!v) pendingCount++;
+    const journalPreview: JournalPreviewLine[] = b.lines.map((l) => ({
+      ...label(l.accountId, l.missKey),
+      debit: l.debit,
+      credit: l.credit,
+    }));
     return {
       paymentId: p.id,
       paymentNumber: p.paymentNumber,
@@ -151,6 +161,7 @@ export async function getPaymentsJournal(params: {
       debitAP: b.apGross,
       creditWht: b.wht,
       creditBank: b.amount,
+      journalPreview,
       duplicate: p.referenceNumber?.trim()
         ? dupKeys.has(dupKey(p.companyBankAccountId, p.referenceNumber, p.amount))
         : false,

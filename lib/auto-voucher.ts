@@ -34,6 +34,20 @@ export function configResolver(config: { key: string; accountId: string | null }
   };
 }
 
+export type AccountLabel = { code: string; name: string };
+export type JournalPreviewLine = { code: string; name: string; debit: number; credit: number };
+
+/**
+ * ผูก accountId → {code, name} จากผังบัญชี สำหรับแสดง "ตัวอย่างการบันทึกบัญชี" (Dr/Cr) ในสมุดรายวันย่อย
+ * (ซื้อ/ขาย/รับเงิน/จ่ายเงิน) — ถ้า accountId เป็น null (ยังไม่ได้ตั้งค่าผังบัญชีคุมยอด) แสดง fallbackLabel
+ * แทน เหมือน meta ที่ buildLedger() ใช้กับรายการที่ยังไม่ได้ตั้งค่า.
+ */
+export function accountLabelResolver(chartAccounts: { id: string; code: string; name: string }[]) {
+  const map = new Map(chartAccounts.map((a) => [a.id, { code: a.code, name: a.name } as AccountLabel]));
+  return (accountId: string | null | undefined, fallbackLabel: string): AccountLabel =>
+    (accountId && map.get(accountId)) || { code: "—", name: `(ยังไม่ได้ตั้งค่า) ${fallbackLabel}` };
+}
+
 /**
  * ตัวสร้างเลขที่ใบสำคัญต่อ prefix เดือน (JV + ปี ค.ศ. + เดือน) — seed จากเลขล่าสุดในฐานข้อมูล
  * ครั้งแรกที่พบ prefix นั้น แล้วเดินต่อในหน่วยความจำ เพื่อให้สร้างหลายใบในรอบเดียวไม่ชนกันเอง.

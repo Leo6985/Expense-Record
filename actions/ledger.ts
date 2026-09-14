@@ -449,6 +449,15 @@ export async function getGeneralLedger(params: {
     byAccount.set(e.accountId, arr);
   }
 
+  // เผื่อบัญชีที่เพิ่งเพิ่มเข้าผังบัญชีแล้วยังไม่มีรายการเคลื่อนไหวเลย — ให้ยังปรากฏในรายงาน (ยอดเป็น 0)
+  // แทนที่จะหายไปเงียบๆ จนกว่าจะมีรายการแรกเกิดขึ้น
+  if (accountId === "ALL") {
+    const activeAccounts = await prisma.chartOfAccount.findMany({ where: { isActive: true }, select: { id: true } });
+    for (const a of activeAccounts) if (!byAccount.has(a.id)) byAccount.set(a.id, []);
+  } else if (!byAccount.has(accountId)) {
+    byAccount.set(accountId, []);
+  }
+
   const blocks: GeneralLedgerBlock[] = [];
   for (const [accId, list] of byAccount) {
     const m = meta.get(accId) ?? { code: "?", name: "(ไม่ทราบบัญชี)", type: "UNKNOWN", sortKey: "zzzz" };
