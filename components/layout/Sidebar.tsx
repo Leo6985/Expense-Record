@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import Image from "next/image";
 import { usePathname } from "next/navigation";
 import { signOut } from "next-auth/react";
 import { cn } from "@/lib/utils";
@@ -98,13 +99,19 @@ export default function Sidebar({ role, userName }: { role: string; userName: st
 
   return (
     <aside className="fixed left-0 top-0 h-full w-60 bg-blue-900 text-white flex flex-col z-10">
-      <div className="px-4 py-5 border-b border-blue-800">
-        <Link href="/" className="flex items-center gap-2">
-          <div className="w-8 h-8 bg-blue-400 rounded-lg flex items-center justify-center text-sm">💼</div>
-          <div>
-            <div className="font-bold text-sm leading-tight">โปรแกรมจัดการงานบัญชี</div>
-            <div className="text-blue-300 text-xs">Accounting Management System</div>
+      <div className="px-4 py-4 border-b border-blue-800">
+        <Link href="/" className="block">
+          <div className="bg-white rounded-lg px-3 py-2 flex items-center justify-center">
+            <Image
+              src="/logo-chemtech.png"
+              alt="Chemtech Innovation"
+              width={1799}
+              height={453}
+              priority
+              className="h-8 w-auto"
+            />
           </div>
+          <div className="text-center text-blue-300 text-[11px] mt-1.5">โปรแกรมจัดการงานบัญชี</div>
         </Link>
       </div>
 

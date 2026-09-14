@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { signIn } from "next-auth/react";
 import { useRouter } from "next/navigation";
+import Image from "next/image";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -35,12 +36,15 @@ export default function LoginPage() {
     <div className="min-h-screen bg-gradient-to-br from-blue-800 to-blue-600 flex items-center justify-center p-4">
       <div className="bg-white rounded-2xl shadow-xl w-full max-w-md p-8">
         <div className="text-center mb-8">
-          <div className="inline-flex items-center justify-center w-16 h-16 bg-blue-100 rounded-full mb-4">
-            <svg className="w-8 h-8 text-blue-700" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 11h.01M12 11h.01M15 11h.01M4 19h16a2 2 0 002-2V7a2 2 0 00-2-2H4a2 2 0 00-2 2v10a2 2 0 002 2z" />
-            </svg>
-          </div>
-          <h1 className="text-2xl font-bold text-gray-900">โปรแกรมจัดการงานบัญชี</h1>
+          <Image
+            src="/logo-chemtech.png"
+            alt="Chemtech Innovation"
+            width={1799}
+            height={453}
+            priority
+            className="h-14 w-auto mx-auto mb-4"
+          />
+          <h1 className="text-xl font-bold text-gray-900">โปรแกรมจัดการงานบัญชี</h1>
           <p className="text-gray-500 mt-1 text-sm">กรุณาเข้าสู่ระบบเพื่อดำเนินการต่อ</p>
         </div>
 
@@ -86,10 +90,6 @@ export default function LoginPage() {
             {loading ? "กำลังเข้าสู่ระบบ..." : "เข้าสู่ระบบ"}
           </button>
         </form>
-
-        <p className="text-center text-xs text-gray-400 mt-6">
-          ค่าเริ่มต้น: admin@company.com / admin1234
-        </p>
       </div>
     </div>
   );

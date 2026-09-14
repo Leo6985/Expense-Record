@@ -32,14 +32,14 @@ export default function CashFlowChart({ data }: { data: CashFlowMonth[] }) {
   const [showTable, setShowTable] = useState(false);
 
   const width = 720;
-  const height = 260;
-  const padding = { top: 24, right: 16, bottom: 28, left: 16 };
+  const height = 170;
+  const padding = { top: 20, right: 16, bottom: 22, left: 16 };
   const plotW = width - padding.left - padding.right;
   const plotH = height - padding.top - padding.bottom;
   const midY = padding.top + plotH / 2;
 
   const maxAbs = Math.max(1, ...data.map((d) => Math.abs(d.net)));
-  const scale = (v: number) => (v / maxAbs) * (plotH / 2 - 20);
+  const scale = (v: number) => (v / maxAbs) * (plotH / 2 - 14);
 
   const n = data.length || 1;
   const slot = plotW / n;
@@ -68,12 +68,12 @@ export default function CashFlowChart({ data }: { data: CashFlowMonth[] }) {
       </div>
 
       {!hasAnyFlow ? (
-        <div className="text-center text-gray-400 text-sm py-16">ยังไม่มีข้อมูลรับ/จ่ายเงินในช่วงนี้</div>
+        <div className="text-center text-gray-400 text-sm py-10">ยังไม่มีข้อมูลรับ/จ่ายเงินในช่วงนี้</div>
       ) : (
         <div className="relative">
           <svg viewBox={`0 0 ${width} ${height}`} className="w-full h-auto" role="img" aria-label="กราฟกระแสเงินสดสุทธิรายเดือน">
-            <line x1={padding.left} y1={midY - (plotH / 2 - 20)} x2={width - padding.right} y2={midY - (plotH / 2 - 20)} stroke={GRIDLINE} strokeWidth={1} />
-            <line x1={padding.left} y1={midY + (plotH / 2 - 20)} x2={width - padding.right} y2={midY + (plotH / 2 - 20)} stroke={GRIDLINE} strokeWidth={1} />
+            <line x1={padding.left} y1={midY - (plotH / 2 - 14)} x2={width - padding.right} y2={midY - (plotH / 2 - 14)} stroke={GRIDLINE} strokeWidth={1} />
+            <line x1={padding.left} y1={midY + (plotH / 2 - 14)} x2={width - padding.right} y2={midY + (plotH / 2 - 14)} stroke={GRIDLINE} strokeWidth={1} />
             <line x1={padding.left} y1={midY} x2={width - padding.right} y2={midY} stroke={BASELINE} strokeWidth={1} />
 
             {data.map((d, i) => {

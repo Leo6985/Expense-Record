@@ -61,5 +61,8 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
   },
   session: {
     strategy: "jwt",
+    // หมดอายุทุก 1 วัน เพื่อให้ผู้ใช้ต้อง login ใหม่หลังเลิกใช้งาน แทนที่จะค้าง session
+    // นานถึง 30 วันตามค่าเริ่มต้นของ NextAuth
+    maxAge: 60 * 60 * 24,
   },
 });
