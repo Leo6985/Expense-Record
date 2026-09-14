@@ -2,6 +2,11 @@ import { getPayments } from "@/actions/payments";
 import Link from "next/link";
 import { formatDate, formatCurrency } from "@/lib/utils";
 
+function vendorNamesFor(payment: Awaited<ReturnType<typeof getPayments>>[number]) {
+  const names = Array.from(new Set(payment.prep.items.map((item) => item.ap.vendor.name)));
+  return names.join(", ");
+}
+
 export default async function PaymentsPage() {
   const payments = await getPayments();
 
@@ -22,6 +27,7 @@ export default async function PaymentsPage() {
               <tr className="bg-gray-50 border-b border-gray-200">
                 <th className="text-left px-4 py-3 font-medium text-gray-600">เลขที่ชำระ</th>
                 <th className="text-left px-4 py-3 font-medium text-gray-600">ใบเตรียมจ่าย</th>
+                <th className="text-left px-4 py-3 font-medium text-gray-600">ผู้ขาย</th>
                 <th className="text-left px-4 py-3 font-medium text-gray-600">วันที่ชำระ</th>
                 <th className="text-left px-4 py-3 font-medium text-gray-600">วิธีการชำระ</th>
                 <th className="text-left px-4 py-3 font-medium text-gray-600">บัญชีที่ใช้จ่าย</th>
@@ -32,7 +38,7 @@ export default async function PaymentsPage() {
             <tbody>
               {payments.length === 0 ? (
                 <tr>
-                  <td colSpan={7} className="px-4 py-8 text-center text-gray-400">ยังไม่มีการชำระเงิน</td>
+                  <td colSpan={8} className="px-4 py-8 text-center text-gray-400">ยังไม่มีการชำระเงิน</td>
                 </tr>
               ) : (
                 payments.map((payment) => (
@@ -46,6 +52,9 @@ export default async function PaymentsPage() {
                       <Link href={`/payment-prep/${payment.prepId}`} className="font-mono text-blue-700 hover:underline">
                         {payment.prep.prepNumber}
                       </Link>
+                    </td>
+                    <td className="px-4 py-3 text-gray-600" title={vendorNamesFor(payment)}>
+                      {vendorNamesFor(payment)}
                     </td>
                     <td className="px-4 py-3 text-gray-600">{formatDate(payment.paymentDate)}</td>
                     <td className="px-4 py-3 text-gray-600">{payment.paymentMethod}</td>
@@ -61,7 +70,7 @@ export default async function PaymentsPage() {
             {payments.length > 0 && (
               <tfoot>
                 <tr className="border-t-2 border-gray-200">
-                  <td colSpan={6} className="px-4 py-3 text-right font-bold text-gray-900">รวมทั้งสิ้น</td>
+                  <td colSpan={7} className="px-4 py-3 text-right font-bold text-gray-900">รวมทั้งสิ้น</td>
                   <td className="px-4 py-3 text-right font-bold text-green-700 text-base">
                     ฿{formatCurrency(payments.reduce((sum, p) => sum + p.amount, 0))}
                   </td>

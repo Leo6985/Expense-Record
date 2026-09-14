@@ -51,6 +51,7 @@ export default function PaymentPrepForm({
   const { data: session } = useSession();
   const userName = session?.user?.name ?? "";
   const [availableAPs, setAvailableAPs] = useState<AP[]>([]);
+  const [vendorSearch, setVendorSearch] = useState("");
   const [selectedAPIds, setSelectedAPIds] = useState<string[]>(initialValues?.items.map((i) => i.apId) ?? []);
   const [amounts, setAmounts] = useState<Record<string, string>>(
     Object.fromEntries((initialValues?.items ?? []).map((i) => [i.apId, i.amount]))
@@ -86,11 +87,15 @@ export default function PaymentPrepForm({
     setWhtRates((prev) => ({ ...prev, [apId]: rate }));
   }
 
+  const filteredAPs = vendorSearch.trim()
+    ? availableAPs.filter((ap) => ap.vendor.name.toLowerCase().includes(vendorSearch.trim().toLowerCase()))
+    : availableAPs;
+
   function selectAll() {
-    setSelectedAPIds(availableAPs.map((ap) => ap.id));
+    setSelectedAPIds((prev) => Array.from(new Set([...prev, ...filteredAPs.map((ap) => ap.id)])));
     setAmounts((prev) => {
       const next = { ...prev };
-      for (const ap of availableAPs) if (!(ap.id in next)) next[ap.id] = String(ap.remainingAmount);
+      for (const ap of filteredAPs) if (!(ap.id in next)) next[ap.id] = String(ap.remainingAmount);
       return next;
     });
   }
@@ -190,11 +195,25 @@ export default function PaymentPrepForm({
             </div>
           </div>
 
+          {availableAPs.length > 0 && (
+            <div className="mb-3">
+              <input
+                type="text"
+                value={vendorSearch}
+                onChange={(e) => setVendorSearch(e.target.value)}
+                placeholder="ค้นหาชื่อผู้ขาย..."
+                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+            </div>
+          )}
+
           {availableAPs.length === 0 ? (
             <p className="text-gray-400 text-sm text-center py-4">ไม่มีรายการหนี้ที่พร้อมจ่าย</p>
+          ) : filteredAPs.length === 0 ? (
+            <p className="text-gray-400 text-sm text-center py-4">ไม่พบผู้ขายที่ค้นหา</p>
           ) : (
             <div className="space-y-2">
-              {availableAPs.map((ap) => {
+              {filteredAPs.map((ap) => {
                 const isOverdue = new Date(ap.dueDate) < new Date();
                 const isSelected = selectedAPIds.includes(ap.id);
                 const isPartialBalance = ap.remainingAmount < ap.totalAmount - 0.01;
