@@ -58,5 +58,8 @@ export async function proxy(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/((?!_next/static|_next/image|favicon.ico).*)"],
+  // Exclude Next.js internals and any static file under /public (anything with a file
+  // extension, e.g. /logo-chemtech.png) — those aren't pages and must be reachable even
+  // when signed out (the login page itself needs to load the logo).
+  matcher: ["/((?!_next/static|_next/image|favicon.ico|.*\\..*).*)"],
 };
