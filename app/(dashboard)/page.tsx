@@ -1,22 +1,92 @@
 import { prisma } from "@/lib/prisma";
 import Link from "next/link";
+import { getAvailableInvoicesForReceipt } from "@/actions/sales-invoices";
+import { formatCurrency } from "@/lib/utils";
+import CashFlowChart, { CashFlowMonth } from "@/components/CashFlowChart";
 
-async function getStats() {
-  const [poCount, pendingAP, pendingPrep, overdueAP] = await Promise.all([
-    prisma.purchaseOrder.count({ where: { status: { in: ["DRAFT", "APPROVED"] } } }),
-    prisma.accountsPayable.count({ where: { status: "PENDING" } }),
-    prisma.paymentPrep.count({ where: { status: "APPROVED" } }),
-    prisma.accountsPayable.count({
-      where: { status: "PENDING", dueDate: { lt: new Date() } },
+const THAI_MONTH_SHORT = [
+  "ม.ค.", "ก.พ.", "มี.ค.", "เม.ย.", "พ.ค.", "มิ.ย.",
+  "ก.ค.", "ส.ค.", "ก.ย.", "ต.ค.", "พ.ย.", "ธ.ค.",
+];
+
+function monthStart(monthsAgo: number, now: Date) {
+  return new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - monthsAgo, 1));
+}
+
+async function getFinancialSummary() {
+  const now = new Date();
+  const thisMonthStart = monthStart(0, now);
+  const nextMonthStart = monthStart(-1, now);
+  const lastMonthStart = monthStart(1, now);
+
+  const [salesThisMonth, salesLastMonth, apOutstanding, arInvoices] = await Promise.all([
+    prisma.salesInvoice.aggregate({
+      where: { status: { not: "CANCELLED" }, invoiceDate: { gte: thisMonthStart, lt: nextMonthStart } },
+      _sum: { totalAmount: true },
+    }),
+    prisma.salesInvoice.aggregate({
+      where: { status: { not: "CANCELLED" }, invoiceDate: { gte: lastMonthStart, lt: thisMonthStart } },
+      _sum: { totalAmount: true },
+    }),
+    prisma.accountsPayable.aggregate({
+      where: { status: { notIn: ["CANCELLED", "PAID"] } },
+      _sum: { totalAmount: true },
+    }),
+    getAvailableInvoicesForReceipt(),
+  ]);
+
+  const arOutstanding = Math.round(arInvoices.reduce((s, inv) => s + inv.remainingAmount, 0) * 100) / 100;
+
+  return {
+    salesThisMonth: salesThisMonth._sum.totalAmount ?? 0,
+    salesLastMonth: salesLastMonth._sum.totalAmount ?? 0,
+    apOutstanding: apOutstanding._sum.totalAmount ?? 0,
+    arOutstanding,
+  };
+}
+
+// เงินสดเข้า/ออกจริง (ไม่ใช่ยอดรับรู้ตามบัญชี) จากใบรับชำระและการจ่ายเงินย้อนหลัง N เดือน — ใช้
+// ข้อมูลดิบจากเอกสารรับ/จ่ายเงินโดยตรง ไม่ผ่าน buildLedger() (ซึ่งหนักเกินไปสำหรับกราฟหน้าหลัก
+// ที่โหลดทุกครั้ง) ให้ผลเป็น "เงินสดที่เคลื่อนไหวจริง" รายเดือน ตรงกับความหมายของ "กระแสเงินสด"
+async function getMonthlyCashFlow(monthsBack: number): Promise<CashFlowMonth[]> {
+  const now = new Date();
+  const start = monthStart(monthsBack - 1, now);
+
+  const [receipts, payments] = await Promise.all([
+    prisma.receipt.findMany({
+      where: { status: { not: "CANCELLED" }, receiptDate: { gte: start } },
+      select: { receiptDate: true, actualReceivedAmount: true },
+    }),
+    prisma.payment.findMany({
+      where: { paymentDate: { gte: start } },
+      select: { paymentDate: true, amount: true },
     }),
   ]);
 
-  const totalPendingAmount = await prisma.accountsPayable.aggregate({
-    where: { status: { in: ["PENDING", "APPROVED"] } },
-    _sum: { totalAmount: true },
-  });
+  const buckets = new Map<string, { label: string; cashIn: number; cashOut: number }>();
+  for (let i = monthsBack - 1; i >= 0; i--) {
+    const d = monthStart(i, now);
+    const key = `${d.getUTCFullYear()}-${d.getUTCMonth()}`;
+    buckets.set(key, { label: `${THAI_MONTH_SHORT[d.getUTCMonth()]} ${String(d.getUTCFullYear() + 543).slice(-2)}`, cashIn: 0, cashOut: 0 });
+  }
 
-  return { poCount, pendingAP, pendingPrep, overdueAP, totalPendingAmount: totalPendingAmount._sum.totalAmount ?? 0 };
+  for (const r of receipts) {
+    const key = `${r.receiptDate.getUTCFullYear()}-${r.receiptDate.getUTCMonth()}`;
+    const bucket = buckets.get(key);
+    if (bucket) bucket.cashIn += r.actualReceivedAmount;
+  }
+  for (const p of payments) {
+    const key = `${p.paymentDate.getUTCFullYear()}-${p.paymentDate.getUTCMonth()}`;
+    const bucket = buckets.get(key);
+    if (bucket) bucket.cashOut += p.amount;
+  }
+
+  return Array.from(buckets.values()).map((b) => ({
+    label: b.label,
+    cashIn: Math.round(b.cashIn * 100) / 100,
+    cashOut: Math.round(b.cashOut * 100) / 100,
+    net: Math.round((b.cashIn - b.cashOut) * 100) / 100,
+  }));
 }
 
 async function getRecentPOs() {
@@ -45,9 +115,42 @@ const statusLabel: Record<string, { label: string; color: string }> = {
   PAID: { label: "จ่ายแล้ว", color: "bg-green-100 text-green-700" },
 };
 
+function FinancialTile({
+  title, value, href, deltaVsLastMonth,
+}: {
+  title: string;
+  value: number;
+  href: string;
+  deltaVsLastMonth?: number;
+}) {
+  let delta: { pct: number; up: boolean } | null = null;
+  if (deltaVsLastMonth !== undefined) {
+    if (deltaVsLastMonth === 0 && value === 0) {
+      delta = null;
+    } else if (deltaVsLastMonth === 0) {
+      delta = { pct: 100, up: true };
+    } else {
+      delta = { pct: Math.round(((value - deltaVsLastMonth) / Math.abs(deltaVsLastMonth)) * 1000) / 10, up: value >= deltaVsLastMonth };
+    }
+  }
+
+  return (
+    <Link href={href} className="rounded-xl border border-gray-200 bg-white p-5 hover:shadow-sm transition-shadow block">
+      <div className="text-sm text-gray-500 font-medium mb-1">{title}</div>
+      <div className="text-2xl font-bold text-gray-900">฿{formatCurrency(value)}</div>
+      {delta && (
+        <div className={`text-xs mt-1 font-medium ${delta.up ? "text-green-700" : "text-red-600"}`}>
+          {delta.up ? "▲" : "▼"} {Math.abs(delta.pct)}% เทียบเดือนก่อน
+        </div>
+      )}
+    </Link>
+  );
+}
+
 export default async function DashboardPage() {
-  const [stats, recentPOs, recentAPs] = await Promise.all([
-    getStats(),
+  const [financials, cashFlow, recentPOs, recentAPs] = await Promise.all([
+    getFinancialSummary(),
+    getMonthlyCashFlow(6),
     getRecentPOs(),
     getRecentAPs(),
   ]);
@@ -56,46 +159,35 @@ export default async function DashboardPage() {
     <div>
       <h1 className="text-2xl font-bold text-gray-900 mb-6">หน้าหลัก</h1>
 
-      {/* Stats */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
-        <StatCard
-          title="PO รอดำเนินการ"
-          value={stats.poCount}
-          icon="📋"
-          color="blue"
-          href="/purchase-orders"
+      {/* Financial summary */}
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
+        <FinancialTile
+          title="ยอดขายเดือนนี้"
+          value={financials.salesThisMonth}
+          deltaVsLastMonth={financials.salesLastMonth}
+          href="/sales-invoices"
         />
-        <StatCard
-          title="หนี้รอตั้ง/อนุมัติ"
-          value={stats.pendingAP}
-          icon="📄"
-          color="yellow"
+        <FinancialTile
+          title="เจ้าหนี้การค้า (คงค้าง)"
+          value={financials.apOutstanding}
           href="/accounts-payable"
         />
-        <StatCard
-          title="รอชำระเงิน"
-          value={stats.pendingPrep}
-          icon="💳"
-          color="purple"
-          href="/payment-prep"
-        />
-        <StatCard
-          title="หนี้เกินกำหนด"
-          value={stats.overdueAP}
-          icon="⚠️"
-          color="red"
-          href="/accounts-payable"
+        <FinancialTile
+          title="ลูกหนี้การค้า (คงค้าง)"
+          value={financials.arOutstanding}
+          href="/sales-invoices"
         />
       </div>
 
-      <div className="bg-blue-50 border border-blue-200 rounded-xl p-4 mb-8 flex items-center gap-4">
-        <div className="text-3xl">💰</div>
-        <div>
-          <div className="text-sm text-blue-600 font-medium">ยอดหนี้คงค้างรวม</div>
-          <div className="text-2xl font-bold text-blue-800">
-            ฿{new Intl.NumberFormat("th-TH", { minimumFractionDigits: 2 }).format(stats.totalPendingAmount)}
-          </div>
+      {/* Cash flow chart */}
+      <div className="bg-white rounded-xl border border-gray-200 p-5 mb-8">
+        <div className="flex items-center justify-between mb-3">
+          <h2 className="font-semibold text-gray-900">กระแสเงินสด (6 เดือนล่าสุด)</h2>
+          <Link href="/cash-flow" className="text-sm text-blue-600 hover:underline">
+            งบกระแสเงินสดฉบับเต็ม →
+          </Link>
         </div>
+        <CashFlowChart data={cashFlow} />
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -126,7 +218,7 @@ export default async function DashboardPage() {
                     <div className="text-right">
                       <span className={`text-xs px-2 py-0.5 rounded-full ${s.color}`}>{s.label}</span>
                       <div className="text-xs text-gray-500 mt-0.5">
-                        ฿{new Intl.NumberFormat("th-TH", { minimumFractionDigits: 2 }).format(po.totalAmount)}
+                        ฿{formatCurrency(po.totalAmount)}
                       </div>
                     </div>
                   </Link>
@@ -166,7 +258,7 @@ export default async function DashboardPage() {
                         {isOverdue ? "เกินกำหนด" : s.label}
                       </span>
                       <div className="text-xs text-gray-500 mt-0.5">
-                        ฿{new Intl.NumberFormat("th-TH", { minimumFractionDigits: 2 }).format(ap.totalAmount)}
+                        ฿{formatCurrency(ap.totalAmount)}
                       </div>
                     </div>
                   </Link>
@@ -177,32 +269,5 @@ export default async function DashboardPage() {
         </div>
       </div>
     </div>
-  );
-}
-
-function StatCard({
-  title, value, icon, color, href
-}: {
-  title: string;
-  value: number;
-  icon: string;
-  color: "blue" | "yellow" | "purple" | "red";
-  href: string;
-}) {
-  const colors = {
-    blue: "bg-blue-50 border-blue-200 text-blue-800",
-    yellow: "bg-yellow-50 border-yellow-200 text-yellow-800",
-    purple: "bg-purple-50 border-purple-200 text-purple-800",
-    red: "bg-red-50 border-red-200 text-red-800",
-  };
-
-  return (
-    <Link href={href} className={`rounded-xl border p-4 flex items-center gap-3 hover:shadow-sm transition-shadow ${colors[color]}`}>
-      <span className="text-2xl">{icon}</span>
-      <div>
-        <div className="text-2xl font-bold">{value}</div>
-        <div className="text-xs font-medium opacity-75">{title}</div>
-      </div>
-    </Link>
   );
 }
