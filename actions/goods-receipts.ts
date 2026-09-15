@@ -234,6 +234,7 @@ export async function createGoodsReceipt(data: {
   invoiceNumber: string;
   invoiceDate: string;
   vatAmount?: number;
+  vatType?: string;
   items: { poItemId: string; quantity: number }[];
 }) {
   const session = await auth();
@@ -294,6 +295,7 @@ export async function createGoodsReceipt(data: {
         dueDate,
         amount,
         vatAmount,
+        vatType: data.vatType || "NORMAL",
         totalAmount,
         createdByName,
         createdById,
@@ -327,6 +329,7 @@ export async function updateGoodsReceipt(
     invoiceNumber: string;
     invoiceDate: string;
     vatAmount?: number;
+    vatType?: string;
     items: { poItemId: string; quantity: number }[];
   }
 ) {
@@ -388,6 +391,7 @@ export async function updateGoodsReceipt(
           dueDate,
           amount,
           vatAmount,
+          vatType: data.vatType || "NORMAL",
           totalAmount,
         },
       });

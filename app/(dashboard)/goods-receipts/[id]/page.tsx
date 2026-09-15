@@ -148,7 +148,7 @@ export default function GoodsReceiptDetailPage() {
               <span>฿{formatCurrency(ap.amount)}</span>
             </div>
             <div className="flex justify-between text-gray-600">
-              <span>VAT</span>
+              <span>VAT{ap.vatType === "DEFERRED" && " (ภาษีซื้อไม่ถึงกำหนด)"}</span>
               <span>฿{formatCurrency(ap.vatAmount)}</span>
             </div>
             <div className="flex justify-between font-bold text-orange-700 text-base border-t border-orange-100 pt-2">

@@ -197,7 +197,7 @@ export default function APDetailPage() {
             <span>฿{formatCurrency(ap.amount)}</span>
           </div>
           <div className="flex justify-between text-gray-600">
-            <span>VAT</span>
+            <span>VAT{ap.vatType === "DEFERRED" && " (ภาษีซื้อไม่ถึงกำหนด)"}</span>
             <span>฿{formatCurrency(ap.vatAmount)}</span>
           </div>
           <div className="flex justify-between font-bold text-gray-900 text-lg border-t border-gray-200 pt-3 mt-2">

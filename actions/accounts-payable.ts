@@ -33,6 +33,7 @@ export async function syncAPToSheet(ap: {
   dueDate: Date;
   amount: number;
   vatAmount: number;
+  vatType: string;
   totalAmount: number;
   status: string;
   accountId: string | null;
@@ -171,6 +172,8 @@ export async function createAccountsPayable(data: {
   dueDate: string;
   amount: number;
   vatAmount?: number;
+  // "NORMAL" (ค่าเริ่มต้น) หรือ "DEFERRED" (ภาษีซื้อไม่ถึงกำหนด) — ดู vatType บน model AccountsPayable
+  vatType?: string;
   notes?: string;
 }) {
   const session = await auth();
@@ -194,6 +197,7 @@ export async function createAccountsPayable(data: {
       dueDate: new Date(data.dueDate),
       amount: data.amount,
       vatAmount,
+      vatType: data.vatType || "NORMAL",
       totalAmount,
       notes: data.notes,
       createdByName,

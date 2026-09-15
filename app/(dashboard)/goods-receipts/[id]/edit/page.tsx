@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { getGoodsReceiptForEdit, updateGoodsReceipt } from "@/actions/goods-receipts";
 import { formatCurrency } from "@/lib/utils";
+import { VAT_RATE_BY_TYPE, VAT_TYPE_OPTIONS } from "@/lib/vat";
 import Link from "next/link";
 import PageLoading from "@/components/PageLoading";
 
@@ -23,9 +24,10 @@ export default function EditGoodsReceiptPage() {
   const [notes, setNotes] = useState("");
   const [invoiceNumber, setInvoiceNumber] = useState("");
   const [invoiceDate, setInvoiceDate] = useState("");
-  const [vatRate, setVatRate] = useState("7");
+  const [vatType, setVatType] = useState("STANDARD");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const vatRatePercent = VAT_RATE_BY_TYPE[vatType as keyof typeof VAT_RATE_BY_TYPE] ?? 0;
 
   useEffect(() => {
     getGoodsReceiptForEdit(params.id as string).then((data) => {
@@ -38,7 +40,7 @@ export default function EditGoodsReceiptPage() {
       if (ap) {
         setInvoiceNumber(ap.invoiceNumber);
         setInvoiceDate(toDateInput(ap.invoiceDate));
-        setVatRate(ap.vatAmount > 0 ? "7" : "0");
+        setVatType(ap.vatAmount > 0 ? (ap.vatType === "DEFERRED" ? "DEFERRED" : "STANDARD") : "NONE");
       }
       const defaults: Record<string, string> = {};
       for (const item of data.items) defaults[item.poItemId] = String(item.quantity);
@@ -55,7 +57,7 @@ export default function EditGoodsReceiptPage() {
     .map((item) => ({ item, qty: parseFloat(receiveQty[item.id] || "0") || 0 }))
     .filter((l) => l.qty > 0);
   const receiveAmount = receiveLines.reduce((sum, l) => sum + l.qty * l.item.unitPrice, 0);
-  const vatAmount = receiveAmount * ((parseFloat(vatRate) || 0) / 100);
+  const vatAmount = receiveAmount * (vatRatePercent / 100);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -79,6 +81,7 @@ export default function EditGoodsReceiptPage() {
         invoiceNumber: invoiceNumber.trim(),
         invoiceDate,
         vatAmount: vatAmount || undefined,
+        vatType,
         items: receiveLines.map((l) => ({ poItemId: l.item.id, quantity: l.qty })),
       });
       router.push(`/goods-receipts/${gr!.id}`);
@@ -218,12 +221,13 @@ export default function EditGoodsReceiptPage() {
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">อัตราภาษีมูลค่าเพิ่ม (VAT)</label>
               <select
-                value={vatRate}
-                onChange={(e) => setVatRate(e.target.value)}
+                value={vatType}
+                onChange={(e) => setVatType(e.target.value)}
                 className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-orange-500"
               >
-                <option value="0">0% (ไม่มี VAT)</option>
-                <option value="7">7% (มาตรฐาน)</option>
+                {VAT_TYPE_OPTIONS.map((o) => (
+                  <option key={o.value} value={o.value}>{o.label}</option>
+                ))}
               </select>
             </div>
           </div>
@@ -232,7 +236,9 @@ export default function EditGoodsReceiptPage() {
             <div className="text-right">
               <div className="text-gray-500">มูลค่า: ฿{formatCurrency(receiveAmount)}</div>
               {vatAmount > 0 && (
-                <div className="text-gray-500">VAT {vatRate}%: ฿{formatCurrency(vatAmount)}</div>
+                <div className="text-gray-500">
+                  VAT {vatRatePercent}%{vatType === "DEFERRED" && " (ภาษีซื้อไม่ถึงกำหนด)"}: ฿{formatCurrency(vatAmount)}
+                </div>
               )}
               <div className="font-bold text-orange-700 text-base">
                 รวม: ฿{formatCurrency(receiveAmount + vatAmount)}

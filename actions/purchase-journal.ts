@@ -18,6 +18,9 @@ import { JournalVoucherRecord, JournalVoucherLineRecord } from "@/lib/sheets-tab
 
 // ผังบัญชีคุมยอดที่จำเป็นสำหรับคู่บัญชีซื้อ/ตั้งหนี้ (ดู lib/ledger.ts step 6)
 const REQUIRED_CONFIG_KEYS = ["ap", "vat_input", "ap_suspense"] as const;
+// ต้องตั้งค่าเฉพาะเมื่อมีใบตั้งหนี้ที่เลือก "ภาษีซื้อไม่ถึงกำหนด" อยู่ในช่วงที่ค้นหา/สร้าง Voucher จริง
+// (ไม่บังคับทุกคนต้องตั้งค่า ถ้ายังไม่เคยใช้ตัวเลือกนี้)
+const DEFERRED_VAT_CONFIG_KEY = "vat_input_deferred" as const;
 
 // คีย์กันซ้ำระดับข้อมูล: ผู้ขายเดียวกัน + เลขที่ใบกำกับเดียวกัน (ไม่สนตัวพิมพ์/ช่องว่างหัวท้าย)
 const dupKey = (vendorId: string, invoiceNumber: string) =>
@@ -32,6 +35,7 @@ export type PurchaseJournalRow = {
   source: "GR" | "DIRECT"; // มาจากการรับสินค้า (มี grId) หรือบันทึกตรง/นำเข้า CSV
   creditAP: number; // เจ้าหนี้การค้า = totalAmount
   debitVat: number; // ภาษีซื้อ = vatAmount
+  vatType: string; // "NORMAL" | "DEFERRED" (ภาษีซื้อไม่ถึงกำหนด)
   debitExpense: number; // ค่าใช้จ่าย/สินค้า = amount (ก่อน VAT)
   apStatus: string;
   journalPreview: JournalPreviewLine[]; // ตัวอย่างการบันทึกบัญชี Dr/Cr ของใบตั้งหนี้นี้
@@ -70,6 +74,7 @@ export async function getPurchaseJournal(params: {
         invoiceDate: true,
         amount: true,
         vatAmount: true,
+        vatType: true,
         totalAmount: true,
         grId: true,
         vendorId: true,
@@ -93,17 +98,20 @@ export async function getPurchaseJournal(params: {
       where: { sourceType: "AP" },
       select: { id: true, voucherNumber: true, status: true, sourceId: true },
     }),
-    prisma.accountingConfig.findMany({ where: { key: { in: [...REQUIRED_CONFIG_KEYS] } } }),
+    prisma.accountingConfig.findMany({ where: { key: { in: [...REQUIRED_CONFIG_KEYS, DEFERRED_VAT_CONFIG_KEY] } } }),
     prisma.chartOfAccount.findMany({ select: { id: true, code: true, name: true } }),
   ]);
 
   const voucherByAP = new Map(vouchers.map((v) => [v.sourceId ?? "", v]));
   const cfg = new Map(config.map((c) => [c.key, c.accountId]));
-  const configMissing = REQUIRED_CONFIG_KEYS.filter((k) => !cfg.get(k));
+  const configMissing: string[] = REQUIRED_CONFIG_KEYS.filter((k) => !cfg.get(k));
+  const hasDeferredVat = aps.some((ap) => ap.vatType === "DEFERRED" && ap.vatAmount !== 0);
+  if (hasDeferredVat && !cfg.get(DEFERRED_VAT_CONFIG_KEY)) configMissing.push(DEFERRED_VAT_CONFIG_KEY);
 
   const label = accountLabelResolver(chartAccounts);
   const apLabel = label(cfg.get("ap"), "เจ้าหนี้การค้า (ap)");
   const vatLabel = label(cfg.get("vat_input"), "ภาษีซื้อ (vat_input)");
+  const vatDeferredLabel = label(cfg.get(DEFERRED_VAT_CONFIG_KEY), "ภาษีซื้อไม่ถึงกำหนด (vat_input_deferred)");
   const suspenseId = cfg.get("ap_suspense") ?? null;
 
   // จัดกลุ่มหาใบที่ผู้ขาย+เลขที่ใบกำกับซ้ำกัน (นับเฉพาะเลขที่ใบกำกับที่ไม่ว่าง)
@@ -156,8 +164,9 @@ export async function getPurchaseJournal(params: {
       credit: 0,
     }));
 
+    const rowVatLabel = ap.vatType === "DEFERRED" ? vatDeferredLabel : vatLabel;
     const journalPreview: JournalPreviewLine[] = [
-      ...(debitVat !== 0 ? [{ ...vatLabel, debit: debitVat, credit: 0 }] : []),
+      ...(debitVat !== 0 ? [{ ...rowVatLabel, debit: debitVat, credit: 0 }] : []),
       ...expenseLines,
       { ...apLabel, debit: 0, credit: creditAP },
     ];
@@ -171,6 +180,7 @@ export async function getPurchaseJournal(params: {
       source: ap.grId ? "GR" : "DIRECT",
       creditAP,
       debitVat,
+      vatType: ap.vatType,
       debitExpense,
       apStatus: ap.status,
       journalPreview,
@@ -212,7 +222,8 @@ export type GeneratePurchaseVouchersResult = {
  *
  * คู่บัญชีต่อใบ (ตรงกับ lib/ledger.ts step 6):
  *   Cr เจ้าหนี้การค้า (ap) = totalAmount
- *   Dr ภาษีซื้อ (vat_input) = vatAmount (ข้ามถ้าเป็น 0)
+ *   Dr ภาษีซื้อ (vat_input) หรือภาษีซื้อไม่ถึงกำหนด (vat_input_deferred) ถ้า ap.vatType = "DEFERRED"
+ *     = vatAmount (ข้ามถ้าเป็น 0)
  *   Dr ค่าใช้จ่าย/สินค้า = amount — ปันตามสัดส่วนมูลค่ารายการรับสินค้า (product.accountId) ถ้ามีสาย GR,
  *     ไม่งั้นใช้ accountId ที่ตั้งไว้บนใบตั้งหนี้ ไม่งั้นตกเข้าบัญชีพัก (ap_suspense). เศษปัดเศษดันเข้าบรรทัดสุดท้าย.
  */
@@ -230,12 +241,13 @@ export async function generatePurchaseVouchers(params: {
   toDate.setHours(23, 59, 59, 999);
 
   const [config, chartAccounts] = await Promise.all([
-    prisma.accountingConfig.findMany({ where: { key: { in: [...REQUIRED_CONFIG_KEYS] } } }),
+    prisma.accountingConfig.findMany({ where: { key: { in: [...REQUIRED_CONFIG_KEYS, DEFERRED_VAT_CONFIG_KEY] } } }),
     prisma.chartOfAccount.findMany({ select: { id: true } }),
   ]);
   const cfg = new Map(config.map((c) => [c.key, c.accountId]));
   const apId = cfg.get("ap") || null;
   const vatInputId = cfg.get("vat_input") || null;
+  const vatInputDeferredId = cfg.get(DEFERRED_VAT_CONFIG_KEY) || null;
   const suspenseId = cfg.get("ap_suspense") || null;
   const missing = REQUIRED_CONFIG_KEYS.filter((k) => !cfg.get(k));
   if (missing.length > 0) {
@@ -257,6 +269,7 @@ export async function generatePurchaseVouchers(params: {
       invoiceDate: true,
       amount: true,
       vatAmount: true,
+      vatType: true,
       totalAmount: true,
       vendor: { select: { name: true } },
       account: { select: { id: true } },
@@ -274,6 +287,11 @@ export async function generatePurchaseVouchers(params: {
     orderBy: [{ invoiceDate: "asc" }, { apNumber: "asc" }],
   });
   if (aps.length === 0) return { created: 0, skipped: 0, errors: [] };
+  if (aps.some((ap) => ap.vatType === "DEFERRED" && ap.vatAmount !== 0) && !vatInputDeferredId) {
+    throw new Error(
+      `ยังไม่ได้ตั้งค่าผังบัญชีคุมยอด: ${DEFERRED_VAT_CONFIG_KEY} — กรุณาตั้งค่าที่หน้า "ตั้งค่าผังบัญชีคุมยอด" ก่อนสร้าง Voucher`
+    );
+  }
 
   const existing = await prisma.journalVoucher.findMany({
     where: { sourceType: "AP", sourceId: { in: aps.map((a) => a.id) } },
@@ -304,7 +322,10 @@ export async function generatePurchaseVouchers(params: {
     const lines: { accountId: string; debit: number; credit: number }[] = [
       { accountId: apId!, debit: 0, credit: totalAmount },
     ];
-    if (vat !== 0) lines.push({ accountId: vatInputId!, debit: vat, credit: 0 });
+    if (vat !== 0) {
+      const vatAccountId = ap.vatType === "DEFERRED" ? vatInputDeferredId! : vatInputId!;
+      lines.push({ accountId: vatAccountId, debit: vat, credit: 0 });
+    }
 
     // ปันส่วนขาเดบิตค่าใช้จ่าย/สินค้า
     const expenseByAcc = new Map<string, number>();

@@ -187,6 +187,7 @@ async function buildLedger(): Promise<BuiltLedger> {
         invoiceDate: true,
         amount: true,
         vatAmount: true,
+        vatType: true,
         totalAmount: true,
         vendor: { select: { name: true } },
         account: { select: { id: true } },
@@ -330,7 +331,8 @@ async function buildLedger(): Promise<BuiltLedger> {
       description: `ตั้งหนี้ — ${ap.vendor.name} (${ap.invoiceNumber})`,
     });
     doc.credit(resolve("ap"), "ap", ap.totalAmount);
-    doc.debit(resolve("vat_input"), "vat_input", ap.vatAmount);
+    const vatKey = ap.vatType === "DEFERRED" ? "vat_input_deferred" : "vat_input";
+    doc.debit(resolve(vatKey), vatKey, ap.vatAmount);
 
     const items = ap.gr?.items ?? [];
     const itemsSum = items.reduce((s, it) => s + it.totalPrice, 0);

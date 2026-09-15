@@ -250,14 +250,25 @@ export default function ReceiptsJournalPage() {
                           </td>
                           <td className="px-3 py-2 border-l border-gray-100 whitespace-nowrap">
                             {r.voucherId ? (
-                              <Link href={`/journal-vouchers/${r.voucherId}`} className="inline-flex items-center gap-1.5">
-                                <span className="font-mono text-blue-700 hover:underline">{r.voucherNumber}</span>
-                                {badge && (
-                                  <span className={`inline-flex px-1.5 py-0.5 rounded-full text-[11px] font-medium ${badge.color}`}>
-                                    {badge.label}
-                                  </span>
-                                )}
-                              </Link>
+                              <span className="inline-flex items-center gap-1.5">
+                                <Link href={`/journal-vouchers/${r.voucherId}`} className="inline-flex items-center gap-1.5">
+                                  <span className="font-mono text-blue-700 hover:underline">{r.voucherNumber}</span>
+                                  {badge && (
+                                    <span className={`inline-flex px-1.5 py-0.5 rounded-full text-[11px] font-medium ${badge.color}`}>
+                                      {badge.label}
+                                    </span>
+                                  )}
+                                </Link>
+                                <a
+                                  href={`/journal-vouchers/${r.voucherId}/voucher`}
+                                  target="_blank"
+                                  rel="noreferrer"
+                                  title="พิมพ์/พรีวิวใบสำคัญ"
+                                  className="text-gray-400 hover:text-blue-600"
+                                >
+                                  🧾
+                                </a>
+                              </span>
                             ) : (
                               <span className="text-gray-400">ยังไม่สร้าง</span>
                             )}

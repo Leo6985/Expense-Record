@@ -269,6 +269,10 @@ model AccountsPayable {
   dueDate        DateTime
   amount         Float
   vatAmount      Float           @default(0)
+  // ประเภทภาษีซื้อ: "NORMAL" (ภาษีซื้อปกติ) หรือ "DEFERRED" (ภาษีซื้อไม่ถึงกำหนด — ยังไม่ถึงกำหนดใช้
+  // เครดิตภาษี เช่น ยังไม่ได้รับใบกำกับภาษีตัวจริง) กำหนดว่า vatAmount ลงบัญชีคุมยอดใดใน lib/ledger.ts
+  // (vat_input หรือ vat_input_deferred)
+  vatType        String          @default("NORMAL")
   totalAmount    Float
   status         String          @default("PENDING")
   // หมวดบัญชี (ผังบัญชี) สำหรับ AP ที่ไม่ได้มาจากสาย PO/GR/Product (เช่น นำเข้า CSV หรือกรอกตั้งหนี้ตรง) —

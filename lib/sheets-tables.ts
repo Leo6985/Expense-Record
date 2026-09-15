@@ -308,6 +308,7 @@ export type AccountsPayableRecord = {
   approvedById: string | null;
   createdAt: Date;
   updatedAt: Date;
+  vatType: string;
 };
 
 export const ACCOUNTS_PAYABLE_TAB_NAME = "AccountsPayable";
@@ -336,6 +337,7 @@ export const ACCOUNTS_PAYABLE_COLUMNS: ColumnDef[] = [
   // stay aligned with their original column positions — see accountId on AccountsPayable.
   { key: "accountId", type: "string" },
   { key: "poNumberRef", type: "string" },
+  { key: "vatType", type: "string" },
 ];
 
 export const accountsPayableTable = new SheetTable<AccountsPayableRecord>(

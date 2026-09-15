@@ -6,6 +6,7 @@ import { useSession } from "next-auth/react";
 import { createAccountsPayable, getReceivedPOsWithoutAP } from "@/actions/accounts-payable";
 import { getChartOfAccounts } from "@/actions/chart-of-accounts";
 import { formatDate, formatCurrency } from "@/lib/utils";
+import { VAT_RATE_BY_TYPE, VAT_TYPE_OPTIONS } from "@/lib/vat";
 import Link from "next/link";
 
 type Account = Awaited<ReturnType<typeof getChartOfAccounts>>[number];
@@ -37,7 +38,7 @@ export default function NewAPPage() {
   const [invoiceDate, setInvoiceDate] = useState(new Date().toISOString().split("T")[0]);
   const [dueDate, setDueDate] = useState("");
   const [amount, setAmount] = useState("0");
-  const [vatRate, setVatRate] = useState("7");
+  const [vatType, setVatType] = useState("STANDARD");
   const [accountId, setAccountId] = useState("");
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [notes, setNotes] = useState("");
@@ -69,7 +70,8 @@ export default function NewAPPage() {
   }, [invoiceDate, selectedPO]);
 
   const amountNum = parseFloat(amount) || 0;
-  const vatAmount = amountNum * ((parseFloat(vatRate) || 0) / 100);
+  const vatRatePercent = VAT_RATE_BY_TYPE[vatType as keyof typeof VAT_RATE_BY_TYPE] ?? 0;
+  const vatAmount = amountNum * (vatRatePercent / 100);
   const totalAmount = amountNum + vatAmount;
 
   async function handleSubmit(e: React.FormEvent) {
@@ -87,6 +89,7 @@ export default function NewAPPage() {
         dueDate,
         amount: amountNum,
         vatAmount,
+        vatType,
         notes: notes || undefined,
       });
       router.push("/accounts-payable");
@@ -290,12 +293,13 @@ export default function NewAPPage() {
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">อัตรา VAT (%)</label>
                   <select
-                    value={vatRate}
-                    onChange={(e) => setVatRate(e.target.value)}
+                    value={vatType}
+                    onChange={(e) => setVatType(e.target.value)}
                     className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                   >
-                    <option value="0">0% (ไม่มี VAT)</option>
-                    <option value="7">7% (มาตรฐาน)</option>
+                    {VAT_TYPE_OPTIONS.map((o) => (
+                      <option key={o.value} value={o.value}>{o.label}</option>
+                    ))}
                   </select>
                 </div>
               </div>
@@ -306,7 +310,7 @@ export default function NewAPPage() {
                   <span>฿{formatCurrency(amountNum)}</span>
                 </div>
                 <div className="flex justify-between text-gray-600">
-                  <span>VAT {vatRate}%</span>
+                  <span>VAT {vatRatePercent}%{vatType === "DEFERRED" && " (ภาษีซื้อไม่ถึงกำหนด)"}</span>
                   <span>฿{formatCurrency(vatAmount)}</span>
                 </div>
                 <div className="flex justify-between font-bold text-gray-900 text-base border-t border-gray-200 pt-2 mt-2">

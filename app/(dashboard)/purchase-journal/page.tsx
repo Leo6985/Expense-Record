@@ -281,19 +281,37 @@ export default function PurchaseJournalPage() {
                           <td className="px-3 py-2 text-gray-500 whitespace-nowrap">
                             {r.source === "GR" ? "รับสินค้า" : "บันทึกตรง/นำเข้า"}
                           </td>
-                          <td className="px-3 py-2 text-right text-gray-700 border-l border-gray-100">{cell(r.debitVat)}</td>
+                          <td className="px-3 py-2 text-right text-gray-700 border-l border-gray-100">
+                            {cell(r.debitVat)}
+                            {r.vatType === "DEFERRED" && r.debitVat !== 0 && (
+                              <span className="ml-1 inline-flex px-1.5 py-0.5 rounded-full text-[10px] font-medium bg-amber-100 text-amber-700 align-middle">
+                                ไม่ถึงกำหนด
+                              </span>
+                            )}
+                          </td>
                           <td className="px-3 py-2 text-right text-gray-700">{cell(r.debitExpense)}</td>
                           <td className="px-3 py-2 text-right text-gray-700">{cell(r.creditAP)}</td>
                           <td className="px-3 py-2 border-l border-gray-100 whitespace-nowrap">
                             {r.voucherId ? (
-                              <Link href={`/journal-vouchers/${r.voucherId}`} className="inline-flex items-center gap-1.5">
-                                <span className="font-mono text-blue-700 hover:underline">{r.voucherNumber}</span>
-                                {badge && (
-                                  <span className={`inline-flex px-1.5 py-0.5 rounded-full text-[11px] font-medium ${badge.color}`}>
-                                    {badge.label}
-                                  </span>
-                                )}
-                              </Link>
+                              <span className="inline-flex items-center gap-1.5">
+                                <Link href={`/journal-vouchers/${r.voucherId}`} className="inline-flex items-center gap-1.5">
+                                  <span className="font-mono text-blue-700 hover:underline">{r.voucherNumber}</span>
+                                  {badge && (
+                                    <span className={`inline-flex px-1.5 py-0.5 rounded-full text-[11px] font-medium ${badge.color}`}>
+                                      {badge.label}
+                                    </span>
+                                  )}
+                                </Link>
+                                <a
+                                  href={`/journal-vouchers/${r.voucherId}/voucher`}
+                                  target="_blank"
+                                  rel="noreferrer"
+                                  title="พิมพ์/พรีวิวใบสำคัญ"
+                                  className="text-gray-400 hover:text-blue-600"
+                                >
+                                  🧾
+                                </a>
+                              </span>
                             ) : (
                               <span className="text-gray-400">ยังไม่สร้าง</span>
                             )}

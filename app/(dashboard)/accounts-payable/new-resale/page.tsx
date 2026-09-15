@@ -7,6 +7,7 @@ import { createAccountsPayable } from "@/actions/accounts-payable";
 import { getVendors } from "@/actions/vendors";
 import { getChartOfAccounts } from "@/actions/chart-of-accounts";
 import { formatCurrency } from "@/lib/utils";
+import { VAT_RATE_BY_TYPE, VAT_TYPE_OPTIONS } from "@/lib/vat";
 import VendorCombobox from "@/components/VendorCombobox";
 import Link from "next/link";
 
@@ -25,7 +26,7 @@ type Row = {
   poNumberRef: string;
   accountId: string;
   amount: string;
-  vatRate: string;
+  vatType: string;
   notes: string;
 };
 
@@ -38,7 +39,7 @@ function emptyRow(defaultDate: string, defaultAccountId: string): Row {
     poNumberRef: "",
     accountId: defaultAccountId,
     amount: "0",
-    vatRate: "7",
+    vatType: "STANDARD",
     notes: "",
   };
 }
@@ -109,8 +110,9 @@ export default function NewResaleAPPage() {
 
   function rowTotals(row: Row) {
     const amountNum = parseFloat(row.amount) || 0;
-    const vatAmount = amountNum * ((parseFloat(row.vatRate) || 0) / 100);
-    return { amountNum, vatAmount, totalAmount: amountNum + vatAmount };
+    const vatRatePercent = VAT_RATE_BY_TYPE[row.vatType as keyof typeof VAT_RATE_BY_TYPE] ?? 0;
+    const vatAmount = amountNum * (vatRatePercent / 100);
+    return { amountNum, vatRatePercent, vatAmount, totalAmount: amountNum + vatAmount };
   }
 
   const grandTotal = rows.reduce((sum, r) => sum + rowTotals(r).totalAmount, 0);
@@ -145,6 +147,7 @@ export default function NewResaleAPPage() {
           dueDate: row.dueDate,
           amount: amountNum,
           vatAmount,
+          vatType: row.vatType,
           notes: row.notes || undefined,
         });
       }
@@ -178,7 +181,7 @@ export default function NewResaleAPPage() {
         <div className="space-y-4">
           {rows.map((row, index) => {
             const selectedVendor = vendors.find((v) => v.id === row.vendorId) ?? null;
-            const { amountNum, vatAmount, totalAmount } = rowTotals(row);
+            const { amountNum, vatRatePercent, vatAmount, totalAmount } = rowTotals(row);
             return (
               <div key={index} className="bg-white rounded-xl border border-gray-200 p-5">
                 <div className="flex items-center justify-between mb-4 pb-2 border-b border-gray-100">
@@ -291,12 +294,13 @@ export default function NewResaleAPPage() {
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">อัตรา VAT (%)</label>
                     <select
-                      value={row.vatRate}
-                      onChange={(e) => updateRow(index, { vatRate: e.target.value })}
+                      value={row.vatType}
+                      onChange={(e) => updateRow(index, { vatType: e.target.value })}
                       className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                     >
-                      <option value="0">0% (ไม่มี VAT)</option>
-                      <option value="7">7% (มาตรฐาน)</option>
+                      {VAT_TYPE_OPTIONS.map((o) => (
+                        <option key={o.value} value={o.value}>{o.label}</option>
+                      ))}
                     </select>
                   </div>
                 </div>
@@ -307,7 +311,7 @@ export default function NewResaleAPPage() {
                     <span>฿{formatCurrency(amountNum)}</span>
                   </div>
                   <div className="flex justify-between text-gray-600">
-                    <span>VAT {row.vatRate}%</span>
+                    <span>VAT {vatRatePercent}%{row.vatType === "DEFERRED" && " (ภาษีซื้อไม่ถึงกำหนด)"}</span>
                     <span>฿{formatCurrency(vatAmount)}</span>
                   </div>
                   <div className="flex justify-between font-bold text-gray-900 border-t border-gray-200 pt-2 mt-2">
