@@ -13,6 +13,7 @@ const PAYMENT_METHOD_LABELS: Record<string, string> = {
   TRANSFER: "โอนเงิน",
   CHECK: "เช็ค",
   CASH: "เงินสด",
+  JOURNAL: "สมุดรายวันทั่วไป",
 };
 
 export default function BankStatementPage() {

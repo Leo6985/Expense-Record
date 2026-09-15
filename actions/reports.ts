@@ -3,6 +3,7 @@
 import { prisma } from "@/lib/prisma";
 import { revalidatePath } from "next/cache";
 import { inventorySnapshotsTable, InventorySnapshotRecord } from "@/lib/sheets-tables";
+import { bankConfigKey } from "@/lib/ledger";
 
 export async function getDailyPaymentsReport(from: string, to: string) {
   const fromDate = new Date(from);
@@ -169,7 +170,7 @@ export async function getBankStatementReport(bankAccountId: string, from: string
   const toDate = new Date(to);
   toDate.setHours(23, 59, 59, 999);
 
-  const [account, payments, receipts] = await Promise.all([
+  const [account, payments, receipts, bankConfig] = await Promise.all([
     prisma.companyBankAccount.findUnique({ where: { id: bankAccountId } }),
     prisma.payment.findMany({
       where: {
@@ -200,7 +201,23 @@ export async function getBankStatementReport(bankAccountId: string, from: string
       },
       orderBy: { receiptDate: "asc" },
     }),
+    prisma.accountingConfig.findUnique({ where: { key: bankConfigKey(bankAccountId) } }),
   ]);
+
+  // เอกสารรับชำระ/จ่ายเงิน (Payment/Receipt) ด้านบนครอบคลุมเงินเข้า-ออกที่มาจากสาย AP/AR อยู่แล้ว —
+  // ส่วนนี้เพิ่มรายการที่มาจากสมุดรายวันทั่วไป (JournalVoucher) ที่ผู้ใช้คีย์ตรงเข้าบัญชี GL ของ
+  // บัญชีธนาคารนี้เอง (เช่น รับเงินล่วงหน้า, ปรับปรุงยอด) โดยตั้งใจกรอง sourceType เป็น null
+  // (ไม่รวม voucher ที่ระบบสร้างอัตโนมัติจากใบรับชำระ/การจ่ายเงิน — เอกสารเหล่านั้นแสดงซ้ำกับ
+  // payments/receipts ด้านบนอยู่แล้ว ดู JournalVoucher.sourceType ใน prisma/schema.prisma)
+  const journalLines = bankConfig?.accountId
+    ? await prisma.journalVoucherLine.findMany({
+        where: {
+          accountId: bankConfig.accountId,
+          voucher: { status: "APPROVED", sourceType: null, voucherDate: { gte: fromDate, lte: toDate } },
+        },
+        include: { voucher: { select: { voucherNumber: true, voucherDate: true, description: true, notes: true } } },
+      })
+    : [];
 
   const outEntries: BankStatementEntry[] = payments.map((p) => ({
     id: p.id,
@@ -230,7 +247,21 @@ export async function getBankStatementReport(bankAccountId: string, from: string
     href: `/receipts/${r.id}`,
   }));
 
-  const entries = [...outEntries, ...inEntries].sort((a, b) => a.date.getTime() - b.date.getTime());
+  const journalEntries: BankStatementEntry[] = journalLines.map((l) => ({
+    id: l.id,
+    date: l.voucher.voucherDate,
+    documentNumber: l.voucher.voucherNumber,
+    type: l.debit > 0 ? "IN" : "OUT",
+    description: l.description || l.voucher.description,
+    paymentMethod: "JOURNAL",
+    referenceNumber: null,
+    withholdingTax: 0,
+    amount: l.debit > 0 ? l.debit : l.credit,
+    notes: l.voucher.notes,
+    href: `/journal-vouchers/${l.voucherId}`,
+  }));
+
+  const entries = [...outEntries, ...inEntries, ...journalEntries].sort((a, b) => a.date.getTime() - b.date.getTime());
 
   return { account, entries };
 }
