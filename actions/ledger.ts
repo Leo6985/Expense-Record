@@ -578,14 +578,21 @@ export async function getTrialBalance(params: { from: string; to: string }): Pro
     arr.push(e);
     byAccount.set(e.accountId, arr);
   }
+  // บัญชีที่มีแต่ยอดยกมาที่คีย์เอง (ยังไม่มีรายการเคลื่อนไหว) ก็ต้องปรากฏในงบทดลอง
+  for (const [accId, m] of meta) {
+    if (m.openingBalance !== 0 && !byAccount.has(accId)) byAccount.set(accId, []);
+  }
 
   const rows: TrialBalanceRow[] = [];
   for (const [accId, list] of byAccount) {
-    const m = meta.get(accId) ?? { code: "?", name: "(ไม่ทราบบัญชี)", type: "UNKNOWN", sortKey: "zzzz" };
+    const m = meta.get(accId) ?? { code: "?", name: "(ไม่ทราบบัญชี)", type: "UNKNOWN", sortKey: "zzzz", openingBalance: 0 };
 
-    const openingNet = list
-      .filter((e) => e.date < fromDate)
-      .reduce((s, e) => s + e.debit - e.credit, 0);
+    // ยอดยกมา = ยอดที่คีย์ไว้เอง (ก่อนเริ่มใช้ระบบ) + รายการก่อน fromDate — ตรงกับบัญชีแยกประเภท
+    const openingNet =
+      m.openingBalance +
+      list
+        .filter((e) => e.date < fromDate)
+        .reduce((s, e) => s + e.debit - e.credit, 0);
     const periodDebit = round2(
       list.filter((e) => e.date >= fromDate && e.date <= toDate).reduce((s, e) => s + e.debit, 0)
     );

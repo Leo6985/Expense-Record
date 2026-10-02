@@ -52,7 +52,7 @@ export default function TrialBalancePage() {
         <div>
           <h1 className="text-2xl font-bold text-gray-900">งบทดลอง</h1>
           <p className="text-gray-500 text-sm mt-0.5">
-            ยอดยกมา เคลื่อนไหว และยอดยกไปของทุกบัญชี — ยอดยกมาคำนวณจากรายการก่อนวันต้นงวดอัตโนมัติ
+            ยอดยกมา เคลื่อนไหว และยอดยกไปของทุกบัญชี — ยอดยกมา = ยอดยกมาที่คีย์ในบัญชีแยกประเภท + รายการก่อนวันต้นงวด
           </p>
         </div>
         <div className="flex items-center gap-3">
@@ -117,7 +117,7 @@ export default function TrialBalancePage() {
           )}
           {!result.balanced && (
             <div className="bg-red-50 border border-red-200 text-red-700 rounded-lg px-4 py-3 text-sm mb-4">
-              ⚠ งบทดลองไม่ดุล — เดบิตรวมไม่เท่ากับเครดิตรวม ตรวจสอบความครบถ้วนของข้อมูลเอกสารและการตั้งค่าผังบัญชีคุมยอด
+              ⚠ งบทดลองไม่ดุล — เดบิตรวมไม่เท่ากับเครดิตรวม ตรวจสอบความครบถ้วนของข้อมูลเอกสาร การตั้งค่าผังบัญชีคุมยอด และยอดยกมาที่คีย์เอง (เดบิตรวมต้องเท่ากับเครดิตรวม)
             </div>
           )}
 
