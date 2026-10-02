@@ -793,8 +793,8 @@ export async function getProfitLossStatement(params: {
 // (ชุดเดียวกับงบทดลอง). "กำไร(ขาดทุน)สะสม" = รายได้สะสม − ค่าใช้จ่ายสะสม ถึงวันที่นั้น
 // (ระบบยังไม่มีรายการปิดบัญชีสิ้นปี จึงคำนวณให้เอง). สินทรัพย์ควร = หนี้สิน + ส่วนของผู้ถือหุ้น
 // เพราะงบทดลองดุลเสมอ — ผลต่าง (ถ้ามี) มาจากบัญชีคุมยอดที่ยังไม่ได้ตั้งค่า.
-// หมายเหตุ: ยอดยกมาก่อนเริ่มใช้ระบบ (เช่น openingBalance ของบัญชีธนาคาร) ไม่ได้ลงบัญชีแยกประเภท
-// จึงไม่รวมในงบนี้ เช่นเดียวกับงบทดลอง/งบกำไรขาดทุน.
+// ยอดยกมาที่คีย์ไว้ในบัญชีแยกประเภท (ChartOfAccount.openingBalance) รวมอยู่ในยอดคงเหลือ เช่นเดียวกับงบทดลอง.
+// หมายเหตุ: openingBalance ของบัญชีธนาคารบริษัท (CompanyBankAccount) ไม่ได้ลงบัญชีแยกประเภท จึงไม่รวมในงบนี้.
 
 export type BalanceSheetRow = { accountId: string; code: string; name: string; amount: number };
 
@@ -821,7 +821,11 @@ export async function getBalanceSheet(params: { asOf: string }): Promise<Balance
 
   const { entries, meta, unsetKeys } = await buildLedger();
 
+  // เริ่มจากยอดยกมาที่คีย์ไว้เองในบัญชีแยกประเภท — ให้ตรงกับงบทดลอง
   const netByAccount = new Map<string, number>();
+  for (const [accId, m] of meta) {
+    if (m.openingBalance !== 0) netByAccount.set(accId, round2(m.openingBalance));
+  }
   for (const e of entries) {
     if (e.date > asOfDate) continue;
     netByAccount.set(e.accountId, round2((netByAccount.get(e.accountId) ?? 0) + e.debit - e.credit));
