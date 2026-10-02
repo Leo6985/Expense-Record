@@ -20,6 +20,17 @@ export default async function PaymentPrepPrintPage({
   const createdDate = fmt(prep.createdAt);
   const approvedDate = fmt(prep.approvedAt ?? (prep.approvedByName ? prep.updatedAt : null));
 
+  // One line per destination account: items sharing an account number (ignoring spaces/dashes)
+  // collapse to the first occurrence; items without an account number are always listed.
+  const seenAccounts = new Set<string>();
+  const destinationItems = prep.items.filter((item) => {
+    const accountNo = item.ap.vendor.bankAccountNo?.replace(/[\s-]/g, "");
+    if (!accountNo) return true;
+    if (seenAccounts.has(accountNo)) return false;
+    seenAccounts.add(accountNo);
+    return true;
+  });
+
   return (
     <div className="bg-white">
       <AutoPrint />
@@ -107,7 +118,7 @@ export default async function PaymentPrepPrintPage({
         <div className="mb-6">
           <div className="font-semibold text-gray-800 mb-2 text-sm border-b border-gray-300 pb-1">บัญชีปลายทางสำหรับโอนเงิน</div>
           <div className="space-y-1.5 text-sm">
-            {prep.items.map((item, idx) => (
+            {destinationItems.map((item, idx) => (
               <div key={item.id} className="flex items-baseline justify-between gap-4 border-b border-dashed border-gray-200 pb-1.5">
                 <span className="text-gray-800">
                   <span className="text-gray-400 mr-1">{idx + 1}.</span>

@@ -132,9 +132,35 @@ export default function GeneralLedgerPage() {
     downloadCSV(`general_ledger_${from}_${to}.csv`, headers, rows);
   }
 
+  function handlePrint() {
+    // The browser uses document.title as the default PDF file name in "Save as PDF".
+    const prevTitle = document.title;
+    document.title = `general_ledger_${from}_${to}`;
+    window.print();
+    document.title = prevTitle;
+  }
+
+  const selectedAccount = accounts.find((a) => a.id === accountId);
+
   return (
     <div>
-      <div className="flex items-center justify-between mb-6">
+      {/* Print-only report header */}
+      <div className="hidden print:block mb-4 pb-2 border-b-2 border-gray-800">
+        <div className="text-base font-bold text-gray-900">บริษัท เคมเทค อินโนเวชั่น จำกัด</div>
+        <div className="flex items-end justify-between">
+          <div className="text-xl font-bold text-gray-900">บัญชีแยกประเภท</div>
+          <div className="text-sm text-gray-700 text-right">
+            <div>
+              บัญชี: {accountId === "ALL" ? "ทุกบัญชี" : selectedAccount ? `${selectedAccount.code} ${selectedAccount.name}` : "-"}
+            </div>
+            <div>
+              ตั้งแต่วันที่ {formatDate(new Date(from))} ถึง {formatDate(new Date(to))}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div className="flex items-center justify-between mb-6 print:hidden">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">บัญชีแยกประเภท</h1>
           <p className="text-gray-500 text-sm mt-0.5">
@@ -152,7 +178,7 @@ export default function GeneralLedgerPage() {
         </div>
       </div>
 
-      <div className="bg-white rounded-xl border border-gray-200 p-4 mb-5 flex items-end gap-4 flex-wrap">
+      <div className="bg-white rounded-xl border border-gray-200 p-4 mb-5 flex items-end gap-4 flex-wrap print:hidden">
         <div className="flex-1 min-w-56">
           <label className="block text-xs font-medium text-gray-600 mb-1">บัญชี</label>
           <AccountCombobox
@@ -195,6 +221,14 @@ export default function GeneralLedgerPage() {
             ดาวน์โหลด CSV
           </button>
         )}
+        {result && result.blocks.length > 0 && (
+          <button
+            onClick={handlePrint}
+            className="bg-gray-700 text-white px-5 py-2 rounded-lg text-sm font-medium hover:bg-gray-800 transition-colors"
+          >
+            🖨️ พิมพ์ / Export PDF
+          </button>
+        )}
       </div>
 
       {loading ? (
@@ -204,7 +238,7 @@ export default function GeneralLedgerPage() {
       ) : (
         <>
           {result.unsetKeys.length > 0 && (
-            <div className="bg-amber-50 border border-amber-200 text-amber-800 rounded-lg px-4 py-3 text-sm mb-4">
+            <div className="bg-amber-50 border border-amber-200 text-amber-800 rounded-lg px-4 py-3 text-sm mb-4 print:hidden">
               มีบัญชีคุมยอดที่ยังไม่ได้ตั้งค่า — บางรายการจะตกในบัญชี &quot;(ยังไม่ได้ตั้งค่า)&quot;{" "}
               <Link href="/accounting-config" className="underline font-medium">
                 ไปตั้งค่า
@@ -225,6 +259,7 @@ export default function GeneralLedgerPage() {
                       {b.name}
                     </div>
                     <div className="flex items-center gap-4">
+                      <div className="print:hidden">
                       <OpeningBalanceEditor
                         accountId={b.accountId}
                         currentValue={b.openingManual}
@@ -249,13 +284,14 @@ export default function GeneralLedgerPage() {
                           );
                         }}
                       />
+                      </div>
                       <div className="text-xs text-gray-500">
                         ยอดยกไป <span className="font-semibold text-gray-800">฿{formatCurrency(b.closing)}</span>
                       </div>
                     </div>
                   </div>
-                  <div className="overflow-x-auto">
-                    <table className="w-full text-sm">
+                  <div className="overflow-x-auto print:overflow-visible">
+                    <table className="w-full text-sm print:text-xs">
                       <thead>
                         <tr className="bg-white border-b border-gray-200 text-gray-600">
                           <th className="text-left px-4 py-2 font-medium whitespace-nowrap">วันที่</th>
@@ -276,7 +312,7 @@ export default function GeneralLedgerPage() {
                           <td className="px-4 py-2 text-right">฿{formatCurrency(b.opening)}</td>
                         </tr>
                         {b.entries.map((e, i) => (
-                          <tr key={i} className="border-b border-gray-100 hover:bg-gray-50">
+                          <tr key={i} className="border-b border-gray-100 hover:bg-gray-50 break-inside-avoid">
                             <td className="px-4 py-2 whitespace-nowrap text-gray-600">{formatDate(e.date)}</td>
                             <td className="px-4 py-2 whitespace-nowrap">
                               <Link href={e.href} className="text-blue-700 hover:underline font-mono text-xs">
