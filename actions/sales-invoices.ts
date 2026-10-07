@@ -316,8 +316,8 @@ export async function importSalesInvoicesCSV(rows: ImportRow[]) {
         created++;
         toCreateInSheet.push(invoice);
       }
-    } catch {
-      errors.push(`เลขที่ใบกำกับภาษี ${row.invoiceNumber}: บันทึกไม่สำเร็จ`);
+    } catch (err) {
+      errors.push(`เลขที่ใบกำกับภาษี ${row.invoiceNumber}: บันทึกไม่สำเร็จ${err instanceof Error ? ` — ${err.message}` : ""}`);
     }
   }
 

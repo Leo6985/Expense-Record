@@ -223,13 +223,17 @@ export async function importCustomersCSV(
 }
 
 export async function getNextCustomerCode() {
-  const lastCustomer = await prisma.customer.findFirst({
-    orderBy: { code: "desc" },
+  // Only auto-generated "C" + digits codes count — manually entered codes like "RY-C0017"
+  // sort above them alphabetically and would otherwise parse to NaN ("C00NaN").
+  const customers = await prisma.customer.findMany({
+    where: { code: { startsWith: "C" } },
     select: { code: true },
   });
-  if (!lastCustomer) return "C00001";
-  const num = parseInt(lastCustomer.code.replace("C", "")) + 1;
-  return `C${String(num).padStart(5, "0")}`;
+  const max = customers.reduce((m, c) => {
+    const match = /^C(\d+)$/.exec(c.code);
+    return match ? Math.max(m, parseInt(match[1], 10)) : m;
+  }, 0);
+  return `C${String(max + 1).padStart(5, "0")}`;
 }
 
 /**
